@@ -1,7 +1,7 @@
 $Environment = @{
     'BaseImage'         = "E:\Hyper-V\Saved VHDs\WS2019-Base.vhdx";
     'VMFolder'          = "H:\Hyper-V";
-    'PowerShellModules' = @("H:\dev\ADTestEnv\ADTestVHost", "H:\dev\ADTestEnv\S.DS.P");
+    'PowerShellModules' = @("H:\dev\ADTestEnv\ADTestVHost", "H:\dev\ADTestEnv\S.DS.P", "H:\dev\ADTestEnv\Get-PortState");
     'ModulesArchive'    = 'C:\Utilities\PowerShell\Modules\PowerShell.zip'
 }
 
@@ -60,6 +60,11 @@ Function Initialize-ADTestDC {
         }
         else {
             Invoke-Command -VMId $Vm.Id -Credential $cred -ScriptBlock {
+                do {
+                    Write-Verbose "Waiting for LDAP port to become available for $using:DomainName"
+                    $portState = Get-PortState -ComputerName $using:DomainName -port 389, 88
+                } while(($portState.'Port 389' -ne 'Open' -or $portState.'Port 88' -ne 'Open')-and ($null -eq (Start-Sleep 10)))
+
                 $domainCred = New-Object System.Management.Automation.PSCredential "$($using:DomainName)\Administrator", $using:securePassword
                 Install-ADDSDomainController -SkipPreChecks -SafeModeAdministratorPassword $using:securePassword -Credential $domainCred -DomainName $using:DomainName -InstallDns -Force
             }
