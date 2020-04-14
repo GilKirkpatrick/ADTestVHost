@@ -1,136 +1,284 @@
-$Environment = @{
-    'BaseImage'         = "E:\Hyper-V\Saved VHDs\WS2019-Base.vhdx";
-    'VMFolder'          = "H:\Hyper-V";
-    'PowerShellModules' = @("H:\dev\ADTestEnv\ADTestVHost", "H:\dev\ADTestEnv\S.DS.P", "H:\dev\ADTestEnv\Get-PortState");
-    'ModulesArchive'    = 'C:\Utilities\PowerShell\Modules\PowerShell.zip'
+# Sysprep command .\sysprep /mode:vm /oobe /generalize /unattend:c:\windows\system32\sysprep\unattend.xml /shutdown
+# Note on passing parameters to Jobs, ThreadJobs, and Invoke-Command:
+# When start a job or invoke a command on another maching (VM or otherwise), PowerShell starts an entirely new PowerShell environment to run the commands in.
+# The new environment doesn't share any context with the existing one (other than say the file system). Global variables, script variables, loaded modules, etc. don't
+# exist in the new context. And when you use Invoke-Command on a VM or on a remote machine, the commands and modules you use might not even exsit there.
+# The only context sharing is through the parameter list, or through the $using prefix, which only appears to work for local variables.
+
+Function Get-ADTestParameters {
+    if($null -eq $global:_ADTestParameters)
+    {
+        Set-ADTestParameters
+    }
+    # Simply returning the object returns a reference, which means the parameters can be changed... Sadly Clone()
+    # isn't defined for PSObjects.
+    return $global:_ADTestParameters
 }
 
-$Forest = @{
-    'VSwitchName'        = "ADFR";
-    'Password'           = '!@#123qwe';
-    'MachineNamePattern' = "DC{0}";
-    'IPPattern'          = "10.1.0.{0}"
+Function Set-ADTestParameters {
+    [CmdletBinding()]
+    Param(
+        [Parameter()][String]$ConfigPath = (Join-Path -Path (Split-Path $script:MyInvocation.MyCommand.Path) -ChildPath 'DefaultDomainConfig.json')
+    )
+    try {
+        Write-Verbose "Reading default configuration from $ConfigPath"
+        $global:_ADTestParameters = Get-Content $ConfigPath | ConvertFrom-Json
+    }
+    catch {
+        Write-Error "Error reading settings from $ConfigPath."
+        Throw $_
+    }
 }
 
 Function New-ADTestDomain {
     [CmdletBinding()]
     Param(
-        [Parameter(Mandatory = $True)][String]$DomainName,
-        [Parameter()][String]$MachineNamePattern = $Forest.MachineNamePattern,
-        [Parameter()][String]$IPPattern = $Forest.IPPattern,
-        [Parameter()][int]$DCCount = 1
+        [Parameter()][int]$DCCount = 1,
+        [Parameter()][String]$DomainName = (Get-ADTestParameters).DomainName,
+        [Parameter()][String]$DCNamePattern = (Get-ADTestParameters).DCNamePattern,
+        [Parameter()][String]$IPAddressPattern = (Get-ADTestParameters).IPAddressPattern,
+        [Parameter()][String]$ForestMode = (Get-ADTestParameters).ForestMode,
+        [Parameter()][String]$DomainMode = (Get-ADTestParameters).DomainMode,
+        [Parameter()][String]$PwdString = (Get-ADTestParameters).PwdString,
+        [Parameter()][String[]]$ModulesToCopy = (Get-ADTestParameters).ModulesToCopy,
+        [Parameter()][String[]]$FeaturesToInstall = (Get-ADTestParameters).FeaturesToInstall,
+        [Parameter()][String[]]$FilesToCopy = (Get-ADTestParameters).FeaturesToCopy,
+        [Parameter()][String[]]$CommandsToRun = (Get-ADTestParameters).CommandsToRun,
+        [Parameter()][String]$VSwitchName = (Get-ADTestParameters).VSwitchName
     )
 
-    for ($dcNumber = 1; $dcNumber -le $DCCount; $dcNumber++) {
-        $vmName = $MachineNamePattern -f $dcNumber
-        if($dcNumber -eq 1){
-            $dnsAddress = '127.0.0.1'
-        }
-        else {
-            $dnsAddress = $IPPattern -f 1
+    # Create the virtual switch if it doesn't exist already
+    if ($null -eq (Get-VMSwitch -Name $VSwitchName -ErrorAction Ignore)) {
+        [void](New-VMSwitch -Name $VSwitchName -SwitchType Internal -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent))
+    }
+
+    $dnsAddress = '127.0.0.1'
+    for ($dcNumber = 0; $dcNumber -lt $DCCount; $dcNumber++) {
+        $vmName = $DCNamePattern -f ($dcNumber + 1) # +1 so that the name corresponds to the IP address
+        $ipAddress = $IPAddressPattern -f ($dcNumber + 1)
+
+        Write-Verbose "Provisioning server $vmName $ipAddress $dnsAddress"
+
+        $job = Start-ThreadJob -Name $vmName -ArgumentList ($vmName, $VSwitchName, ($dcNumber -eq 0), $ipAddress, $dnsAddress, $DomainName, $ForestMode, $DomainMode) -ScriptBlock {
+            Param($VMName, $VSwitchName, $IsFirstDC, $IPAddress, $DNSAddress, $DomainName, $ForestMode, $DomainMode)
+
+            $VerbosePreference = $using:VerbosePreference
+
+            $vm = New-ADTestServer -VMName $VMName -VSwitchName $VSwitchName -Start -Wait
+            if($IsFirstDC){
+                Write-Verbose "Promoting VM $VMName as first DC in domain $DomainName)"
+                Initialize-ADTestServer -Vm $vm -IPAddress $IPAddress -DNSAddress $DNSAddress
+                Initialize-ADTestFirstDC -Vm $vm -DomainName $DomainName -ForestMode $ForestMode -DomainMode $DomainMode
+            }
+            else {
+                Write-Verbose "Promoting VM $VMName as subsequent DC"
+                Initialize-ADTestServer -Vm $vm -IPAddress $IPAddress -DNSAddress $DNSAddress
+                Initialize-ADTestSubsequentDC -Vm $vm -DomainName $DomainName
+            }
         }
 
-        $ipAddress = $IPPattern -f $dcNumber
-
-        $vm = New-ADTestServer -VMName $vmName -Start -Wait
-        Initialize-ADTestServer -Vm $vm -IPAddress $ipAddress -DNSAddress $dnsAddress -ComputerName $vmName -Wait -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent)
-        Initialize-ADTestDC -VM $vm -DomainName $DomainName -IsFirstDc:($dcNumber -eq 1) -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent)
+        if($dcNumber -eq 0){
+            $dnsAddress = $ipAddress # Use the IP of the first DC as the DNS address for subsequent DCs
+        }
     }
 }
 
-Function Initialize-ADTestDC {
+Function Initialize-ADTestFirstDC {
     [CmdletBinding()]
     Param(
-        [Parameter(Mandatory = $True, ValueFromPipeline = $True)]$Vm,
-        [Parameter(Mandatory = $True)][String]$DomainName,
-        [Parameter()][Switch]$IsFirstDc,
-        [Parameter()][Switch]$Passthru
+        [Parameter(Position=0, Mandatory = $True)]$Vm,
+        [Parameter()][String]$DomainName = (Get-ADTestParameters).DomainName,
+        [Parameter()][String]$ForestMode = (Get-ADTestParameters).ForestMode,
+        [Parameter()][String]$DomainMode = (Get-ADTestParameters).DomainMode
     )
-    # Import-Module ADTestVHost -Force
-    # $vm = Get-VM DC1
-    # Initialize-ADTestDC -Vm $vm -DomainName foo.local -IsFirstDC
     try {
-        $securePassword = $(ConvertTo-SecureString $Forest.Password -AsPlainText -Force)
-        $cred = New-Object System.Management.Automation.PSCredential "Administrator", $securePassword
+        Write-Verbose "Creating domain $DomainName with machine name $($Vm.Name), forest mode $ForestMode, domain mode $DomainMode"
 
-        if ($IsFirstDc) {
-            Invoke-Command -VMId $Vm.Id -Credential $cred -ScriptBlock {
-                Install-ADDSForest -SkipPreChecks -SafeModeAdministratorPassword $using:securePassword -DomainName $using:DomainName -InstallDns -NoDnsOnNetwork -Force
-            }
+        $pss = New-ADTestServerSession -Vm $Vm
+        # Rename the computer before promoting it
+        Write-Verbose "Renaming computer to $($Vm.Name)"
+        Invoke-Command -Session $pss -ArgumentList ($Vm.Name, (Get-ADTestSecurePassword)) -ScriptBlock {
+            Param($ComputerName, $SecurePwd)
+            $cred = New-Object System.Management.Automation.PSCredential "Administrator", $SecurePwd
+            Rename-Computer -LocalCredential $cred -NewName $ComputerName -Force -Restart
         }
-        else {
-            Invoke-Command -VMId $Vm.Id -Credential $cred -ScriptBlock {
-                do {
-                    Write-Verbose "Waiting for LDAP port to become available for $using:DomainName"
-                    $portState = Get-PortState -ComputerName $using:DomainName -port 389, 88
-                } while(($portState.'Port 389' -ne 'Open' -or $portState.'Port 88' -ne 'Open')-and ($null -eq (Start-Sleep 10)))
 
-                $domainCred = New-Object System.Management.Automation.PSCredential "$($using:DomainName)\Administrator", $using:securePassword
-                Install-ADDSDomainController -SkipPreChecks -SafeModeAdministratorPassword $using:securePassword -Credential $domainCred -DomainName $using:DomainName -InstallDns -Force
-            }
-        }
-        if ($Passthru) {
-            return $vm
+        Write-Verbose "Waiting for reboot after computer rename"
+        Wait-VM -VM $Vm -For Reboot
+        Wait-VM -VM $Vm -For Heartbeat
+
+        # Have to re-establish session after reboot
+        $pss = New-ADTestServerSession -Vm $Vm
+        Invoke-Command -Session $pss -ArgumentList ($DomainName, $ForestMode, $DomainMode, (Get-ADTestSecurePassword)) -ScriptBlock {
+            Param($DomainName, $ForestMode, $DomainMode, $SecurePwd)
+            [void](Install-ADDSForest -SkipPreChecks -SafeModeAdministratorPassword $SecurePwd -DomainName $DomainName -ForestMode $ForestMode -DomainMode $DomainMode -InstallDns -NoDnsOnNetwork -Force)
         }
     }
     catch {
-        Throw "From Initialize-ADTestDC: $_"
+        Throw "From Initialize-ADTestFirstDC: $_"
     }
 }
 
-Function Wait-ForADTestLdap {
-    [CmdletBinding()]
+Function Initialize-ADTestSubsequentDC {
     Param(
-        [Parameter(Mandatory = $True, ValueFromPipeline = $True)]$Vm,
-        [Parameter(Mandatory = $True)]$DomainName
+        [Parameter(Mandatory = $True)]$Vm,
+        [Parameter()][String]$DomainName = (Get-ADTestParameters).DomainName
     )
-    # Wait for the DC to be running before tring to connect
-    Wait-VM -VM $vm -For Heartbeat
-    $securePassword = $(ConvertTo-SecureString $Forest.Password -AsPlainText -Force)
-    $cred = New-Object System.Management.Automation.PSCredential "$DomainName\Administrator", $securePassword
-    Invoke-Command -VMId $Vm.Id -Credential $cred -ScriptBlock {
-        # Create a connection object with a short timeout
-        # Spin loop trying to retrieve RootDSE from local DC
-        while ($null -eq $rootDSE) {
-            if ($null -eq $c) {
-                $c = Get-LdapConnection -Timeout (New-Object System.TimeSpan(0, 0, 5)) -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent)
-            }
-            else {
-                $rootDSE = Get-RootDSE -LdapConnection $c -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent)
-            }
+
+    try {
+        Write-Verbose "Joining domain $DomainName with machine name $($Vm.Name)"
+        $pss = New-ADTestServerSession -Vm $Vm
+        Invoke-Command -Session $pss -ArgumentList ($DomainName, $Vm.Name, (Get-ADTestSecurePassword)) -ScriptBlock {
+            Param($DomainName, $ComputerName, $SecurePwd)
+
+            do {
+                Write-Verbose "Waiting for DC to become available for $DomainName"
+                $dc = Get-ADDomainController -Discover -DomainName $DomainName -Service PrimaryDC -ErrorAction Ignore
+            } while(($null -eq $dc) -and $null -eq (Start-Sleep 10))
+
+            Write-Verbose "Joining computer $ComputerName to domain $DomainName"
+            $domainCred = New-Object System.Management.Automation.PSCredential "$DomainName\Administrator", $SecurePwd
+            [void](Add-Computer -DomainName $DomainName -Credential $domainCred -NewName $ComputerName -Force -Restart)
         }
-        return $rootDSE
+        Remove-PSSession $pss
+    }
+    catch {
+        Throw "From Initialize-ADTestSubsequentDC domain join: $_"
+    }
+
+    Write-Verbose "Waiting for $($Vm.Name) reboot after domain join"
+    Wait-VM -VM $Vm -For Reboot
+    Wait-VM -VM $Vm -For Heartbeat
+
+    try {
+        Write-Verbose "Promoting $($Vm.Name) as a DC in $DomainName"
+        $securePwd = Get-ADTestSecurePassword
+        $cred = New-Object System.Management.Automation.PSCredential ".\Administrator", $securePwd # Have to use .\Administrator because the machine is a domain member now
+        Invoke-Command -VMId $Vm.Id -Credential $cred -ArgumentList ($DomainName, $securePwd) -ScriptBlock {
+            Param($DomainName, $SecurePwd)
+
+            $domainCred = New-Object System.Management.Automation.PSCredential "$DomainName\Administrator", $SecurePwd
+            [void](Install-ADDSDomainController -SafeModeAdministratorPassword $SecurePwd -DomainName $DomainName -Credential $domainCred -InstallDns -Force)
+        }
+    }
+    catch {
+        Throw "From Initialize-ADTestSubsequentDC dcpromo: $_"
     }
 }
-Function Initialize-ADTestServer {
+
+Function Get-ADTestSecurePassword {
     [CmdletBinding()]
     Param(
-        [Parameter(Mandatory = $True, ValueFromPipeline = $True)]$Vm,
-        [Parameter(Mandatory = $True)][String]$IPAddress,
-        [Parameter(Mandatory = $True)][String]$DNSAddress,
-        [Parameter(Mandatory = $True)][String]$ComputerName,
-        [Parameter()][Switch]$Wait,
-        [Parameter()][Switch]$Passthru
+        [Parameter()][String]$PwdString = (Get-ADTestParameters).PwdString
+    )
+    return ConvertTo-SecureString $PwdString -AsPlainText -Force
+}
+
+Function New-ADTestServerSession {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $True)]$Vm
     )
 
-    Write-Verbose "Initializing server IP: $IPAddress DNS: $DNSAddress Name: $ComputerName"
-    $tempFilename = [System.IO.Path]::GetTempFileName() -replace '\.tmp', '.zip'
-    Compress-Archive -Path $Environment.PowerShellModules -DestinationPath $tempFilename -Force -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent)
+    Write-Verbose "Creating PowerShell session on VM $($Vm.Name)"
+    $cred = New-Object System.Management.Automation.PSCredential "Administrator", (Get-ADTestSecurePassword)
 
-    Copy-VMFile -VM $Vm -SourcePath $tempFilename -FileSource Host -DestinationPath $Environment.ModulesArchive -CreateFullPath -Force -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent)
+    return New-PSSession -VMId $Vm.Id -Credential $cred
+}
 
-    # This is where to copy other files and applications that need to be installed
+Function Wait-ForDomainAvailable {
+    [CmdletBinding()]
+    Param(
+        [Parameter()][String]$DomainName
+    )
+    do {
+        Write-Verbose "Waiting for DC to become available for $DomainName"
+        $dc = Get-ADDomainController -Discover -DomainName $DomainName -Service PrimaryDC -ErrorAction Ignore
+    } while(($null -eq $dc) -and $null -eq (Start-Sleep 10))
+    return $dc[0]
+}
 
-    $securePassword = ConvertTo-SecureString $Forest.Password -AsPlainText -Force
-    $cred = New-Object System.Management.Automation.PSCredential "Administrator", $securePassword
+Function Set-ADTestServerNetworking {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $True)]$Vm,
+        [Parameter(Mandatory = $True)][String]$IPAddress,
+        [Parameter(Mandatory = $True)][String]$DNSAddress
+    )
+    Write-Verbose "Set networking configuration for $($Vm.Name) IP: $IPAddress DNS: $DNSAddress"
 
-    $pss = New-PSSession -VMId $Vm.Id -Credential $cred
-    Invoke-Command -Session $pss -ScriptBlock {
-        # The Hyper-V PoSh module is a prereq for this one
-        Install-WindowsFeature -Name 'Hyper-V-PowerShell' -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent)
+    $pss = New-ADTestServerSession -Vm $Vm
+    Invoke-Command -Session $pss -ArgumentList ($IPAddress, $DNSAddress) -ScriptBlock {
+        Param($IPAddress, $DNSAddress)
 
-        # Expand the archive of PowerShell commands
-        Expand-Archive -Path $using:Environment.ModulesArchive -DestinationPath (Split-Path -Path $using:Environment.ModulesArchive -Parent) -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent)
+        $VerbosePreference = $using:VerbosePreference
+
+        # Configure IP and DNS of the first Ethernet adapter
+        $iface = (Get-NetIPInterface -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -match "^Ethernet.*" } | Select-Object -First 1)
+        [void]($iface | New-NetIPAddress -IPAddress $IPAddress -PrefixLength 24 -Verbose:([bool]$PSBoundParameters["Verbose"].IsPresent))
+        [void]($iface | Set-DnsClientServerAddress -ServerAddresses @($DNSAddress) -Verbose:([bool]$PSBoundParameters["Verbose"].IsPresent))
+
+        # Disable IPv6
+        Disable-NetAdapterBinding -Name $iface.InterfaceAlias -ComponentID ms_tcpip6
+    }
+    Remove-PSSession $pss
+}
+
+Function Install-ADTestServerFeatures {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $True)]$Vm,
+        [Parameter()][String[]]$FeaturesToInstall = (Get-ADTestParameters).FeaturesToInstall
+    )
+    Write-Verbose "Install Windows features for $($Vm.Name) $($FeaturesToInstall -join ',')"
+
+    $pss = New-ADTestServerSession -Vm $Vm
+    Invoke-Command -Session $pss -ArgumentList ($FeaturesToInstall) -ScriptBlock {
+        Param($FeaturesToInstall)
+
+        $VerbosePreference = $using:VerbosePreference
+
+        # Disable auto-startup of Server Mangler because it is annoying
+        [void](Get-ScheduledTask -TaskName 'ServerManager' | Disable-ScheduledTask)
+
+        # Install AD components
+        [void](Install-WindowsFeature AD-Domain-Services -Verbose:([bool]$PSBoundParameters["Verbose"].IsPresent))
+        [void](Install-WindowsFeature RSAT-ADDS -IncludeAllSubFeature -Verbose:([bool]$PSBoundParameters["Verbose"].IsPresent))
+
+        # Install additional configured features
+        if($null -ne $FeaturesToInstall -and $FeaturesToInstall.Count -gt 0){
+            [void](Install-WindowsFeature -Name $FeaturesToInstall -Verbose:([bool]$PSBoundParameters["Verbose"].IsPresent))
+        }
+    }
+    Remove-PSSession $pss
+}
+
+Function Copy-ADTestServerModules {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $True)]$Vm,
+        [Parameter()][String[]]$ModulesToCopy = (Get-ADTestParameters).ModulesToCopy
+    )
+    Write-Verbose "Copy PowerShell modules for $($Vm.Name) $($ModulesToInstall -join ',')"
+
+    # Create a file archive containing all the folders to copy. This is really just to simplify the ise of Copy-VMFile
+    $modulesArchive = 'C:\Users\Administrator\Documents\WindowsPowerShell\Modules\PowerShell.zip' # Target in guest
+    if($ModulesToCopy.Count -gt 0){
+        $folders = @()
+        $ModulesToCopy.ForEach({
+            $folders += (Get-Module -ListAvailable $_).ModuleBase
+        })
+        $tempFilename = [System.IO.Path]::GetTempFileName() -replace '\.tmp', '.zip'
+        Compress-Archive -Path $folders -DestinationPath $tempFilename -Force -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent)
+
+        Copy-VMFile -VM $Vm -SourcePath $tempFilename -FileSource Host -DestinationPath $modulesArchive -CreateFullPath -Force -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent)
+    }
+
+    $pss = New-ADTestServerSession -Vm $Vm
+    Invoke-Command -Session $pss -ArgumentList ($ModulesToCopy, $modulesArchive) -ScriptBlock {
+        Param($ModulesToCopy, $ModulesArchive)
+
+        $VerbosePreference = $using:VerbosePreference
 
         # Allow unsigned PowerShell modules
         # Should change to AllSigned, or import code signing cert intro Trusted Publishers and Trusted Root CAs
@@ -138,78 +286,70 @@ Function Initialize-ADTestServer {
         Set-ExecutionPolicy Bypass -Scope LocalMachine
 
         # Set PSModulePath for the current session and permanently for the current user
-        $env:PSModulePath = "$(Split-Path -Path $using:Environment.ModulesArchive -Parent);$env:PSModulePath"
-        [System.Environment]::SetEnvironmentVariable('PSModulePath', $env:PSModulePath, 'Machine')
-
-        Import-Module ADTestVHost, ServerManager, S.DS.P -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent)
-
-        # Disable auto-startup of Server Mangler because it is annoying
-        Get-ScheduledTask -TaskName 'ServerManager' | Disable-ScheduledTask
-
-        Write-Verbose "IPAddress: $using:IPAddress DNSAddress: $using:DNSAddress ComputerName: $using:ComputerName"
-
-        # Install AD components
-        Install-WindowsFeature AD-Domain-Services -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent)
-        Install-WindowsFeature RSAT-ADDS -IncludeAllSubFeature -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent)
-
-        # Configure IP and DNS of the first Ethernet adapter
-        $iface = (Get-NetIPInterface -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -match "^Ethernet.*" } | Select-Object -First 1)
-        $iface | New-NetIPAddress -IPAddress $using:IPAddress -PrefixLength 24 -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent)
-        $iface | Set-DnsClientServerAddress -ServerAddresses @($using:DNSAddress) -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent)
-
-        # Disable IPv6
-        Disable-NetAdapterBinding -Name $iface.InterfaceAlias -ComponentID ms_tcpip6
-
-        # Rename the computer and restart it. This should always be the last step.
-        Write-Verbose "Renaming computer to $using:ComputerName and restarting"
-        Rename-Computer -NewName $using:ComputerName -Restart
+        # Not needed if we put the modules in C:\Users\Administrator\Documents\WindowsPowerShell\Modules
+        # $env:PSModulePath = "$(Split-Path -Path $using:Environment.ModulesArchive -Parent);$env:PSModulePath"
+        # [System.Environment]::SetEnvironmentVariable('PSModulePath', $env:PSModulePath, 'Machine')
+        if($null -ne $ModulesToCopy -and $ModulesToCopy.Count -gt 0){
+            # Expand the archive of PowerShell commands
+            Expand-Archive -Path $ModulesArchive -DestinationPath (Split-Path -Path $ModulesArchive -Parent) -Verbose:$Verbose
+            # Import the modules we copied.
+            Import-Module $ModulesToCopy -Verbose:$Verbose
+        }
     }
     Remove-PSSession $pss
+}
 
-    if ($Wait) {
-        Write-Verbose "Waiting for reboot of $ComputerName"
-        Wait-VM -VM $Vm -For Reboot
-        Write-Verbose "Waiting for heartbeat of $ComputerName"
-        Wait-VM -VM $Vm -For Heartbeat
-    }
+Function Initialize-ADTestServer {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Position=0, Mandatory = $True)]$Vm,
+        [Parameter(Position=1, Mandatory = $True)][String]$IPAddress,
+        [Parameter(Position=2, Mandatory = $True)][String]$DNSAddress
+    )
 
-    if ($Passthru) {
-        return $Vm
-    }
+    Set-ADTestServerNetworking -Vm $Vm -IPAddress $IPAddress -DNSAddress $DNSAddress
+
+    Install-ADTestServerFeatures -Vm $Vm -FeaturesToInstall (Get-ADTestParameters).FeaturesToInstall
+
+    Copy-ADTestServerModules -Vm $Vm -ModulesToCopy (Get-ADTestParameters).ModulesToCopy
+
+    # This is where to copy other files and applications that need to be installed
+    # Copy-ADTestServerFiles -Vm $Vm -FilesToCopy (Get-ADTestParameters).FilesToCopy
+
+    # This is where to invoke additional commands
+    # Invoke-ADTestServerCommands -Vm $Vm -CommandsToRun (Get-ADTestParameters).CommandsToRun
 }
 
 Function New-ADTestServer {
     [CmdletBinding()]
     Param(
         [Parameter(Mandatory = $True)][String]$VMName,
-        [Parameter()][String]$BaseImage = $Environment.BaseImage,
-        [Parameter()][String]$VMFolder = $Environment.VMFolder,
-        [Parameter()][String]$VSwitchName = $Forest.VSwitchName,
+        [Parameter()][String]$BaseImagePath = (Get-ADTestParameters).BaseImagePath,
+        [Parameter()][String]$VMPath = (Get-ADTestParameters).VMPath,
+        [Parameter()][String]$VSwitchName = (Get-ADTestParameters).VSwitchName,
         [Parameter()][uint64]$Memory = 2048MB,
         [Parameter()][Switch]$Start,
         [Parameter()][Switch]$Wait
     )
 
+    Write-Verbose "Base image $BaseImagePath VMPath $VMPath"
     try {
-        if ($null -eq (Get-VMSwitch -Name $VSwitchName -ErrorAction Ignore)) {
-            New-VMSwitch -Name $VSwitchName -SwitchType Internal -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent)
-        }
         if ($null -ne (Get-VM -Name $VMName -ErrorAction Ignore)) {
             Throw "VM $VMName already exists"
         }
         Write-Verbose "Creating VM $VMName"
-        $vm = New-VM -Name $VMName -MemoryStartupBytes $Memory -NoVHD -SwitchName $VSwitchName -Path $VMFolder -Generation 2 -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent)
+        $vm = New-VM -Name $VMName -MemoryStartupBytes $Memory -NoVHD -SwitchName $VSwitchName -Path $VMPath -Generation 2 -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent)
         Enable-VMIntegrationService -VM $vm -Name 'Guest Service Interface', 'Heartbeat', 'Key-Value Pair Exchange', 'Shutdown', 'Time Synchronization', 'VSS'
         Get-VMNetworkAdapter -VM $vm | Connect-VMNetworkAdapter -SwitchName $VSwitchName
         $vhdPath = "$($vm.Path)\Virtual Hard Disks\$($vm.Name).vhdx"
         if (Test-Path $vhdPath) {
             Remove-Item $vhdPath -Force
         }
-        $vhd = New-VHD -Differencing -Path $vhdPath -ParentPath $BaseImage -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent)
+        $vhd = New-VHD -Differencing -Path $vhdPath -ParentPath $BaseImagePath -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent)
         $bootDevice = Add-VMHardDiskDrive -VM $vm -Path $vhd.Path -ControllerType SCSI -ControllerNumber 0 -ControllerLocation 0 -Passthru -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent)
-        Set-VMFirmware -VM $vm -BootOrder @($bootDevice) -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent)
+        [void](Set-VMFirmware -VM $vm -BootOrder @($bootDevice) -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent))
         if ($Start) {
-            Start-VM -VM $vm -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent)
+            [void](Start-VM -VM $vm -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent))
         }
         if ($Wait) {
             Wait-VM -VM $vm -For Heartbeat -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent)
@@ -220,4 +360,92 @@ Function New-ADTestServer {
     }
 
     return $vm
+}
+
+Function Get-ADTestDCNames {
+    [CmdletBinding()]
+    param()
+    $regex = '^' + ([String](Get-ADTestParameters).DCNamePattern).Replace('{0}', '\d+') + '$'
+    return (Get-VM | Where-Object {$_.Name -match $regex}).Name
+    # Note that you should use the array result from this command with .ForEach rather than piping the result to ForEach-Object (%)
+    # This ensures that an empty set (no matching names) is not processed
+}
+
+Function Stop-ADTestDCs {
+    [CmdletBinding()]
+    param()
+
+    Write-Verbose "Stopping all DCs matching $((Get-ADTestParameters).DCNamePattern)"
+    (Get-ADTestDCNames).ForEach({
+        [void](Stop-VM -Name $_ -Force -AsJob)
+    })
+
+    do {
+        $stillRunning = $False
+        Write-Verbose "Waiting for all DCs to stop"
+        (Get-ADTestDCNames).ForEach({
+            Write-Verbose "Status of VM $_ is $((Get-VM -Name $_).State)"
+            if((Get-VM -Name $_).State -ne 'Off'){
+                $stillRunning = $True
+            }
+        })
+    } while($stillRunning -and ($null -eq (Start-Sleep 1)))
+}
+
+Function Reset-ADTestDCs {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$True)][String]$SnapshotName,
+        [Parameter()][Switch]$Start
+    )
+    Write-Verbose "Restoring all DCs to checkpoint $SnapshotName"
+    Get-ADTestDCNames.ForEach({
+        Restore-VMSnapshot -VMName $_ -Name $SnapshotName -Confirm:$False
+    })
+    # Generally checkpoints are taken when DCs are stopped, but if not, starting them will yield a benign warning
+    if($Start){
+        Start-ADTestDCs
+    }
+}
+
+Function Start-ADTestDCs {
+    [CmdletBinding()]
+    param()
+    Write-Verbose "Starting all DCs"
+    Start-VM -Name (Get-ADTestDCNames)
+}
+
+Function Checkpoint-ADTestDCs {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$True)][String]$SnapshotName
+    )
+    Write-Verbose "Checkpointing all DCs to checkpoint $SnapshotName"
+    Stop-ADTestDCs -Verbose:([bool]$PSBoundParameters["Verbose"].IsPresent)
+    Checkpoint-VM -Name (Get-ADTestDCNames) -SnapshotName $SnapshotName
+    Start-ADTestDCs -Verbose:([bool]$PSBoundParameters["Verbose"].IsPresent)
+}
+
+Function Remove-ADTestDCs {
+    [CmdletBinding()]
+    param()
+
+    Write-Verbose "Removing all DCs matching $((Get-ADTestParameters).DCNamePattern)"
+    Remove-ADTestServer -ServerNames (Get-ADTestDCNames) -Verbose:([bool]$PSBoundParameters["Verbose"].IsPresent)
+}
+
+Function Remove-ADTestServer {
+    [CmdletBinding()]
+    param(
+        [Parameter(Position=0)][String[]]$ServerNames
+    )
+
+    Write-Verbose "Removing servers in $($ServerNames -join ',')"
+
+    $ServerNames.ForEach({
+        Stop-VM -Name $_ -TurnOff -Force
+        Remove-VM -Name $_ -Force
+        Write-Verbose "Removing files at $(Join-Path -Path (Get-ADTestParameters).VMPath -ChildPath $_)"
+        Remove-Item (Join-Path -Path (Get-ADTestParameters).VMPath -ChildPath $_) -Recurse -Force
+    })
 }
