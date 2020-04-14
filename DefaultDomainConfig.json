@@ -1,0 +1,16 @@
+{
+    "vSwitchName" : "ADFR",
+    "vmPath" : "H:\\Hyper-V",
+    "domainName" : "foo.local",
+    "forestMode" : "Default",
+    "domainMode" : "Default",
+    "dcNamePattern" : "FOODC{0}",
+    "ipAddressPattern" : "10.1.0.{0}",
+    "baseImagePath" : "H:\\Saved VHDs\\WS2019-Base.vhdx",
+    "pwdString" : "!@#123qwe",
+    "modulesToCopy" : [],
+    "featuresToInstall" : [],
+    "filesToCopy" : [],
+    "commandsToRun" : [],
+    "parentDomain" : ""
+}
