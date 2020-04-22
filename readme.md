@@ -46,6 +46,9 @@ This module is an evolution of scripts and programs I created years ago to buid 
 ## Known issues
 * The progress reporting for New-ADTestDomain is somewhat incomplete and provides some unnecessary detail.
 * The -Verbose switch doesn't provide verbose details from the VMs themselves, just what executes on the Hyper-V host.
+* After changing the DefaultDomainConfig.json file, you neet run Set-ADTestParameters to make changes take effect.
+* No support for .VHD files or Gen1 VMs.
+* The commandsToRun value in the DefaultDomainConfig.json file is not processed.
 
 ## Changelog
 ### Version 1.1 22 April 2020

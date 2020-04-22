@@ -30,7 +30,7 @@ CompanyName = 'Red Giraffe, LLC'
 Copyright = '(c) 2020 Red Giraffe, LLC. All rights reserved.'
 
 # Description of the functionality provided by this module
-# Description = ''
+# Description = 'PowerShell commands to create Active Directory test environments in Hyper-V'
 
 # Minimum version of the Windows PowerShell engine required by this module
 # PowerShellVersion = ''
@@ -51,7 +51,7 @@ Copyright = '(c) 2020 Red Giraffe, LLC. All rights reserved.'
 # ProcessorArchitecture = ''
 
 # Modules that must be imported into the global environment prior to importing this module
-RequiredModules = @('Hyper-V')
+RequiredModules = @('Hyper-V','ThreadJob')
 
 # Assemblies that must be loaded prior to importing this module
 # RequiredAssemblies = @()
@@ -79,14 +79,15 @@ FunctionsToExport = @('New-ADTestDomain',
     'Set-ADTestServerNetworking',
     'Set-ADTestParameters',
     'Get-ADTestParameters',
-    'Wait-ForDomainAvailable',
     'Get-ADTestDCNames',
+    'Join-ADTestServer',
     'Stop-ADTestDCs',
     'Reset-ADTestDCs',
     'Start-ADTestDCs',
     'Checkpoint-ADTestDCs',
     'Remove-ADTestDCs',
-    'Remove-ADTestServer'
+    'Remove-ADTestServer',
+    'Rename-ADTestServer'
 )
 
 # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.

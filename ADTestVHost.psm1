@@ -4,8 +4,21 @@
 # The new environment doesn't share any context with the existing one (other than say the file system). Global variables, script variables, loaded modules, etc. don't
 # exist in the new context. And when you use Invoke-Command on a VM or on a remote machine, the commands and modules you use might not even exsit there.
 # The only context sharing is through the parameter list, or through the $using prefix, which only appears to work for local variables.
+# Install-Module -Name ThreadJob -RequiredVersion 1.0
+# Sysprep image must use .VHDX
+# Base image not parameterized
+# Provide details on name formatting
+# Set/Get-ADTestParameters needs to reset after change to file
+# Gen1 vs. Gen2
+# Differencing disk vs. copies
+# Computer\HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon set to 0
+# Maybe not install features? More flexible
+# Move rename to initialize... don't worry about reboot
+# Provide a way to create servers, domain-joined or not from same image
 
 Function Get-ADTestParameters {
+#    if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
+#    }
     if($null -eq $global:_ADTestParameters)
     {
         Set-ADTestParameters
@@ -44,7 +57,9 @@ Function New-ADTestDomain {
         [Parameter()][String[]]$FeaturesToInstall = (Get-ADTestParameters).FeaturesToInstall,
         [Parameter()][String[]]$FilesToCopy = (Get-ADTestParameters).FeaturesToCopy,
         [Parameter()][String[]]$CommandsToRun = (Get-ADTestParameters).CommandsToRun,
-        [Parameter()][String]$VSwitchName = (Get-ADTestParameters).VSwitchName
+        [Parameter()][String]$VSwitchName = (Get-ADTestParameters).VSwitchName,
+        [Parameter()][String]$BaseImagePath = (Get-ADTestParameters).BaseImagePath,
+        [Parameter()][Switch]$Wait
     )
 
     # Create the virtual switch if it doesn't exist already
@@ -53,26 +68,28 @@ Function New-ADTestDomain {
     }
 
     $dnsAddress = '127.0.0.1'
+    $jobs= @()
     for ($dcNumber = 0; $dcNumber -lt $DCCount; $dcNumber++) {
         $vmName = $DCNamePattern -f ($dcNumber + 1) # +1 so that the name corresponds to the IP address
         $ipAddress = $IPAddressPattern -f ($dcNumber + 1)
 
-        Write-Verbose "Provisioning server $vmName $ipAddress $dnsAddress"
+        $jobs += Start-ThreadJob -Name $vmName -ArgumentList ($vmName, $BaseImagePath, $VSwitchName, ($dcNumber -eq 0), $ipAddress, $dnsAddress, $DomainName, $ForestMode, $DomainMode) -ScriptBlock {
+            Param($VMName, $BaseImagePath, $VSwitchName, $IsFirstDC, $IPAddress, $DNSAddress, $DomainName, $ForestMode, $DomainMode)
 
-        $job = Start-ThreadJob -Name $vmName -ArgumentList ($vmName, $VSwitchName, ($dcNumber -eq 0), $ipAddress, $dnsAddress, $DomainName, $ForestMode, $DomainMode) -ScriptBlock {
-            Param($VMName, $VSwitchName, $IsFirstDC, $IPAddress, $DNSAddress, $DomainName, $ForestMode, $DomainMode)
-
-            $VerbosePreference = $using:VerbosePreference
-
-            $vm = New-ADTestServer -VMName $VMName -VSwitchName $VSwitchName -Start -Wait
+            Write-Progress -Activity 'Provisioning new server' -
+            $vm = New-ADTestServer -VMName $VMName -VSwitchName $VSwitchName -BaseImagePath $BaseImagePath -Start -Wait
             if($IsFirstDC){
                 Write-Verbose "Promoting VM $VMName as first DC in domain $DomainName)"
+                Write-Progress -Activity 'Initializing new server' -PercentComplete 20
                 Initialize-ADTestServer -Vm $vm -IPAddress $IPAddress -DNSAddress $DNSAddress
+                Write-Progress -Activity 'Promoting first DC' -PercentComplete 50
                 Initialize-ADTestFirstDC -Vm $vm -DomainName $DomainName -ForestMode $ForestMode -DomainMode $DomainMode
             }
             else {
                 Write-Verbose "Promoting VM $VMName as subsequent DC"
-                Initialize-ADTestServer -Vm $vm -IPAddress $IPAddress -DNSAddress $DNSAddress
+                Write-Progress -Activity 'Initializing new server' -PercentComplete 20
+                Initialize-ADTestServer -Vm $vm -IPAddress $IPAddress -DNSAddress $DNSAddress -DomainName $DomainName
+                Write-Progress -Activity 'Promoting subsequent DC' -PercentComplete 50
                 Initialize-ADTestSubsequentDC -Vm $vm -DomainName $DomainName
             }
         }
@@ -81,12 +98,29 @@ Function New-ADTestDomain {
             $dnsAddress = $ipAddress # Use the IP of the first DC as the DNS address for subsequent DCs
         }
     }
+    if($Wait){
+        # Sit in a loop and poll the Progress channel of each job. Exit when all jobs are complete
+        $runningStates = @('Running', 'AtBreakpoint', 'NotStarted', 'Stopping', 'Suspended')
+        do {
+            $jobsRunning = $false
+            $jobs.ForEach({
+                if($runningStates -eq $_.State){ # N.B. comparison must be ordered this way (array -eq scalar)
+                    $jobsRunning = $True
+                    if($null -ne $_.Progress -and $_.Progress.Count -gt 0){
+                        $lastProgress = $_.Progress[$_.Progress.Count - 1]
+                        Write-Progress -Id $_.Id -Activity ("$($_.Name) - $($lastProgress.Activity)") -Status $lastProgress.StatusDescription -PercentComplete $lastProgress.PercentComplete -CurrentOperation $lastProgress.CurrentOperation
+                        Start-Sleep 1
+                    }
+                }
+            })
+        } while($jobsRunning)
+    }
 }
 
 Function Initialize-ADTestFirstDC {
     [CmdletBinding()]
     Param(
-        [Parameter(Position=0, Mandatory = $True)]$Vm,
+        [Parameter(Position=0, Mandatory=$True)]$Vm,
         [Parameter()][String]$DomainName = (Get-ADTestParameters).DomainName,
         [Parameter()][String]$ForestMode = (Get-ADTestParameters).ForestMode,
         [Parameter()][String]$DomainMode = (Get-ADTestParameters).DomainMode
@@ -94,20 +128,6 @@ Function Initialize-ADTestFirstDC {
     try {
         Write-Verbose "Creating domain $DomainName with machine name $($Vm.Name), forest mode $ForestMode, domain mode $DomainMode"
 
-        $pss = New-ADTestServerSession -Vm $Vm
-        # Rename the computer before promoting it
-        Write-Verbose "Renaming computer to $($Vm.Name)"
-        Invoke-Command -Session $pss -ArgumentList ($Vm.Name, (Get-ADTestSecurePassword)) -ScriptBlock {
-            Param($ComputerName, $SecurePwd)
-            $cred = New-Object System.Management.Automation.PSCredential "Administrator", $SecurePwd
-            Rename-Computer -LocalCredential $cred -NewName $ComputerName -Force -Restart
-        }
-
-        Write-Verbose "Waiting for reboot after computer rename"
-        Wait-VM -VM $Vm -For Reboot
-        Wait-VM -VM $Vm -For Heartbeat
-
-        # Have to re-establish session after reboot
         $pss = New-ADTestServerSession -Vm $Vm
         Invoke-Command -Session $pss -ArgumentList ($DomainName, $ForestMode, $DomainMode, (Get-ADTestSecurePassword)) -ScriptBlock {
             Param($DomainName, $ForestMode, $DomainMode, $SecurePwd)
@@ -121,37 +141,12 @@ Function Initialize-ADTestFirstDC {
 
 Function Initialize-ADTestSubsequentDC {
     Param(
-        [Parameter(Mandatory = $True)]$Vm,
-        [Parameter()][String]$DomainName = (Get-ADTestParameters).DomainName
+        [Parameter(Mandatory=$True, Position=0)]$Vm,
+        [Parameter(Position=1)][String]$DomainName = (Get-ADTestParameters).DomainName
     )
 
+    Write-Verbose "Promoting $($Vm.Name) as a DC in $DomainName"
     try {
-        Write-Verbose "Joining domain $DomainName with machine name $($Vm.Name)"
-        $pss = New-ADTestServerSession -Vm $Vm
-        Invoke-Command -Session $pss -ArgumentList ($DomainName, $Vm.Name, (Get-ADTestSecurePassword)) -ScriptBlock {
-            Param($DomainName, $ComputerName, $SecurePwd)
-
-            do {
-                Write-Verbose "Waiting for DC to become available for $DomainName"
-                $dc = Get-ADDomainController -Discover -DomainName $DomainName -Service PrimaryDC -ErrorAction Ignore
-            } while(($null -eq $dc) -and $null -eq (Start-Sleep 10))
-
-            Write-Verbose "Joining computer $ComputerName to domain $DomainName"
-            $domainCred = New-Object System.Management.Automation.PSCredential "$DomainName\Administrator", $SecurePwd
-            [void](Add-Computer -DomainName $DomainName -Credential $domainCred -NewName $ComputerName -Force -Restart)
-        }
-        Remove-PSSession $pss
-    }
-    catch {
-        Throw "From Initialize-ADTestSubsequentDC domain join: $_"
-    }
-
-    Write-Verbose "Waiting for $($Vm.Name) reboot after domain join"
-    Wait-VM -VM $Vm -For Reboot
-    Wait-VM -VM $Vm -For Heartbeat
-
-    try {
-        Write-Verbose "Promoting $($Vm.Name) as a DC in $DomainName"
         $securePwd = Get-ADTestSecurePassword
         $cred = New-Object System.Management.Automation.PSCredential ".\Administrator", $securePwd # Have to use .\Administrator because the machine is a domain member now
         Invoke-Command -VMId $Vm.Id -Credential $cred -ArgumentList ($DomainName, $securePwd) -ScriptBlock {
@@ -177,7 +172,7 @@ Function Get-ADTestSecurePassword {
 Function New-ADTestServerSession {
     [CmdletBinding()]
     Param(
-        [Parameter(Mandatory = $True)]$Vm
+        [Parameter(Mandatory=$True, Position=0)]$Vm
     )
 
     Write-Verbose "Creating PowerShell session on VM $($Vm.Name)"
@@ -186,24 +181,12 @@ Function New-ADTestServerSession {
     return New-PSSession -VMId $Vm.Id -Credential $cred
 }
 
-Function Wait-ForDomainAvailable {
-    [CmdletBinding()]
-    Param(
-        [Parameter()][String]$DomainName
-    )
-    do {
-        Write-Verbose "Waiting for DC to become available for $DomainName"
-        $dc = Get-ADDomainController -Discover -DomainName $DomainName -Service PrimaryDC -ErrorAction Ignore
-    } while(($null -eq $dc) -and $null -eq (Start-Sleep 10))
-    return $dc[0]
-}
-
 Function Set-ADTestServerNetworking {
     [CmdletBinding()]
     Param(
-        [Parameter(Mandatory = $True)]$Vm,
-        [Parameter(Mandatory = $True)][String]$IPAddress,
-        [Parameter(Mandatory = $True)][String]$DNSAddress
+        [Parameter(Mandatory=$True, Position=0)]$Vm,
+        [Parameter(Mandatory=$True, Position=1)][String]$IPAddress,
+        [Parameter(Mandatory=$True, Position=2)][String]$DNSAddress
     )
     Write-Verbose "Set networking configuration for $($Vm.Name) IP: $IPAddress DNS: $DNSAddress"
 
@@ -227,7 +210,7 @@ Function Set-ADTestServerNetworking {
 Function Install-ADTestServerFeatures {
     [CmdletBinding()]
     Param(
-        [Parameter(Mandatory = $True)]$Vm,
+        [Parameter(Mandatory=$True, Position=0)]$Vm,
         [Parameter()][String[]]$FeaturesToInstall = (Get-ADTestParameters).FeaturesToInstall
     )
     Write-Verbose "Install Windows features for $($Vm.Name) $($FeaturesToInstall -join ',')"
@@ -256,12 +239,12 @@ Function Install-ADTestServerFeatures {
 Function Copy-ADTestServerModules {
     [CmdletBinding()]
     Param(
-        [Parameter(Mandatory = $True)]$Vm,
-        [Parameter()][String[]]$ModulesToCopy = (Get-ADTestParameters).ModulesToCopy
+        [Parameter(Mandatory=$True, Position=0)]$Vm,
+        [Parameter(Position=0)][String[]]$ModulesToCopy = (Get-ADTestParameters).ModulesToCopy
     )
     Write-Verbose "Copy PowerShell modules for $($Vm.Name) $($ModulesToInstall -join ',')"
 
-    # Create a file archive containing all the folders to copy. This is really just to simplify the ise of Copy-VMFile
+    # Create a file archive containing all the folders to copy. This is really just to simplify the use of Copy-VMFile
     $modulesArchive = 'C:\Users\Administrator\Documents\WindowsPowerShell\Modules\PowerShell.zip' # Target in guest
     if($ModulesToCopy.Count -gt 0){
         $folders = @()
@@ -302,28 +285,101 @@ Function Copy-ADTestServerModules {
 Function Initialize-ADTestServer {
     [CmdletBinding()]
     Param(
-        [Parameter(Position=0, Mandatory = $True)]$Vm,
-        [Parameter(Position=1, Mandatory = $True)][String]$IPAddress,
-        [Parameter(Position=2, Mandatory = $True)][String]$DNSAddress
+        [Parameter(Mandatory=$True, Position=0, ValueFromPipeline=$True)]$Vm,
+        [Parameter(Mandatory=$True, Position=1)][String]$IPAddress,
+        [Parameter(Mandatory=$True, Position=2)][String]$DNSAddress,
+        [Parameter()][String[]]$FeaturesToInstall = (Get-ADTestParameters).FeaturesToInstall,
+        [Parameter()][String[]]$ModulesToCopy = (Get-ADTestParameters).ModulesToCopy,
+        [Parameter()][String]$DomainName
     )
 
+    Write-Verbose "Initializing VM $($Vm.Name) as test server at $IPAddress"
+
+    Write-Progress -Activity "Initializing VM as test server" -PercentComplete 0 -CurrentOperation "Configuring networking"
     Set-ADTestServerNetworking -Vm $Vm -IPAddress $IPAddress -DNSAddress $DNSAddress
 
-    Install-ADTestServerFeatures -Vm $Vm -FeaturesToInstall (Get-ADTestParameters).FeaturesToInstall
+    Write-Progress -Activity "Initializing VM as test server" -PercentComplete 20 -CurrentOperation "Installing Windows features"
+    Install-ADTestServerFeatures -Vm $Vm -FeaturesToInstall $FeaturesToInstall
 
-    Copy-ADTestServerModules -Vm $Vm -ModulesToCopy (Get-ADTestParameters).ModulesToCopy
+    Write-Progress -Activity "Initializing VM as test server" -PercentComplete 50 -CurrentOperation "Copying and installing additional PowerShell modules"
+    Copy-ADTestServerModules -Vm $Vm -ModulesToCopy $ModulesToCopy
 
     # This is where to copy other files and applications that need to be installed
     # Copy-ADTestServerFiles -Vm $Vm -FilesToCopy (Get-ADTestParameters).FilesToCopy
 
     # This is where to invoke additional commands
     # Invoke-ADTestServerCommands -Vm $Vm -CommandsToRun (Get-ADTestParameters).CommandsToRun
+
+    if(-not [String]::IsNullOrEmpty($DomainName)){
+        Write-Progress -Activity "Initializing VM as test server" -PercentComplete 80 -CurrentOperation "Joining server to domain"
+        Join-ADTestServer -Vm $Vm -DomainName $DomainName -ComputerName $vm.Name
+    }
+    else {
+        Write-Progress -Activity "Initializing VM as test server" -PercentComplete 80 -CurrentOperation "Renaming computer"
+        Rename-ADTestServer -Vm $Vm -ComputerName $vm.Name
+    }
+
+    return $vm
 }
 
+Function Rename-ADTestServer {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory=$True, Position=0)]$Vm,
+        [Parameter(Mandatory=$True, Position=1)][String]$ComputerName
+    )
+
+    $pss = New-ADTestServerSession -Vm $Vm
+
+    Write-Verbose "Renaming computer to $($Vm.Name)"
+    Write-Progress -Activity "Renaming computer to $($Vm.Name)"
+    Invoke-Command -Session $pss -ArgumentList ($ComputerName, (Get-ADTestSecurePassword)) -ScriptBlock {
+        Param($ComputerName, $SecurePwd)
+        $cred = New-Object System.Management.Automation.PSCredential "Administrator", $SecurePwd
+        Rename-Computer -LocalCredential $cred -NewName $ComputerName -Force -Restart
+    }
+    Remove-PSSession $pss
+
+    Write-Verbose "Waiting for reboot after computer rename"
+    Write-Progress -Activity 'Waiting for reboot'
+    Wait-VM -VM $Vm -For Reboot
+    Wait-VM -VM $Vm -For Heartbeat
+}
+
+Function Join-ADTestServer {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory=$True, Position=0)]$Vm,
+        [Parameter(Mandatory=$True, Position=1)][String]$DomainName,
+        [Parameter(Mandatory=$True, Position=2)][String]$ComputerName
+    )
+
+    Write-Verbose "Joining computer to $DomainName and renaming it to $ComputerName"
+    Write-Progress -Activity "Waiting for domain $DomainName to join computer $ComputerName"
+
+    $pss = New-ADTestServerSession -Vm $Vm
+    Invoke-Command -Session $pss -ArgumentList ($DomainName, $ComputerName, (Get-ADTestSecurePassword)) -ScriptBlock {
+        Param($DomainName, $NewName, $SecurePwd)
+
+        do {
+            Write-Verbose "Waiting for DC to become available for $DomainName"
+            $dc = Get-ADDomainController -Discover -DomainName $DomainName -Service PrimaryDC -ErrorAction Ignore
+        } while(($null -eq $dc) -and $null -eq (Start-Sleep 10))
+
+        $domainCred = New-Object System.Management.Automation.PSCredential "$DomainName\Administrator", $SecurePwd
+        [void](Add-Computer -DomainName $DomainName -Credential $domainCred -NewName $NewName -Force -Restart)
+    }
+    Remove-PSSession $pss
+
+    Write-Verbose "Waiting for reboot after computer join"
+    Write-Progress -Activity 'Waiting for reboot'
+    Wait-VM -VM $Vm -For Reboot
+    Wait-VM -VM $Vm -For Heartbeat
+}
 Function New-ADTestServer {
     [CmdletBinding()]
     Param(
-        [Parameter(Mandatory = $True)][String]$VMName,
+        [Parameter(Mandatory=$True)][String]$VMName,
         [Parameter()][String]$BaseImagePath = (Get-ADTestParameters).BaseImagePath,
         [Parameter()][String]$VMPath = (Get-ADTestParameters).VMPath,
         [Parameter()][String]$VSwitchName = (Get-ADTestParameters).VSwitchName,
@@ -395,11 +451,11 @@ Function Stop-ADTestDCs {
 Function Reset-ADTestDCs {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory=$True)][String]$SnapshotName,
+        [Parameter(Mandatory=$True, Position=0)][String]$SnapshotName,
         [Parameter()][Switch]$Start
     )
     Write-Verbose "Restoring all DCs to checkpoint $SnapshotName"
-    Get-ADTestDCNames.ForEach({
+    (Get-ADTestDCNames).ForEach({
         Restore-VMSnapshot -VMName $_ -Name $SnapshotName -Confirm:$False
     })
     # Generally checkpoints are taken when DCs are stopped, but if not, starting them will yield a benign warning
@@ -412,7 +468,9 @@ Function Start-ADTestDCs {
     [CmdletBinding()]
     param()
     Write-Verbose "Starting all DCs"
-    Start-VM -Name (Get-ADTestDCNames)
+    (Get-ADTestDCNames).ForEach({
+        Start-VM -Name $_
+    })
 }
 
 Function Checkpoint-ADTestDCs {
