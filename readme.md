@@ -35,11 +35,17 @@ This module is an evolution of scripts and programs I created years ago to buid 
 
 ## Overview of commands
 *Get-ADTestParameters* retrieves the current default parameters for the AD environments you create. *Set-ADTestParameters* set the default parameters from a .JSON file you specify.
+
 *New-ADTestDomain* creates a new domain with 1 or more domain controllers. It uses the values provided by Get-ADTestParameters, each of which can be overridden with command-line parameters.
+
 *New-ADTestServer* provisions a new VM using the default .VHDX image. You can override the location of the VM files, the base image path, the amount of memory, and the Hyper-V network switch name with command-line parameters. The -Start switch will start the VM, and the -Wait switch will wait till the Sysprep Specialize and OOBE phases complete.
+
 *Initialize-ADTestServer* initializes a VM created by *New-ADTestServer* by configuring the network adapter, renaming the computer to be the same as the VM name, installing Windows features, adding PowerShell modules from the host environment, and optionally joing the machine to an existing domain.
+
 *Checkpoint-ADTestDCs* stops all the DCs (not all servers) in the test environment, takes a snapshot, and restarts the machines.
+
 *Reset-ADTestDCs* applies the snapshot you specify to all of the DCs in the test environment.
+
 *Remove-ADTestDCs* stops all the DCs in the environment, and deletes all the files associated with the VMs.
 
 ## Some examples
