@@ -57,6 +57,10 @@ This module is an evolution of scripts and programs I created years ago to buid 
 * The commandsToRun value in the DefaultDomainConfig.json file is not processed.
 
 ## Changelog
+### Version 1.2 20 May 2020
+1. Added Copy-ADTestServerFiles to copy files and directories from the host to the VM
+2. Added Invoke-ADTestServerCommands to invoke PowerShell commands in the VM
+
 ### Version 1.1 22 April 2020
 1. Added ThreadJob and Hyper-V to the list of required modules
 2. Added -Wait switch to New-ADTestDomain that will provide progress information as VMs are being provisioned and configured
