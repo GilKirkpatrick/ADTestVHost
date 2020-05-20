@@ -320,14 +320,14 @@ Function Invoke-ADTestServerCommands {
     [CmdletBinding()]
     Param(
         [Parameter(Mandatory=$True, Position=0, ValueFromPipeline=$True)]$Vm,
-        [Parameter(Mandatory=$True, Position=1)][ScriptBlock[]]$CommandsToRun
+        [Parameter(Mandatory=$True, Position=1)][String[]]$CommandsToRun
     )
-    Write-Verbose "Invoke commands for $($Vm.Name) $($CommandsToRun -join '`n')"
+    Write-Verbose "Invoke commands for $($Vm.Name) $($CommandsToRun -join ";")"
 
     if($CommandsToRun.Count -gt 0){
         $pss = New-ADTestServerSession -Vm $Vm
         $CommandsToRun.ForEach({
-            Invoke-Command -Session $pss -ScriptBlock $_
+            Invoke-Command -Session $pss -ScriptBlock ([ScriptBlock]::Create($_))
         })
         Remove-PSSession $pss
     }
