@@ -63,8 +63,7 @@
 			<!--Inputs-->
 			<command:inputType>
 				<dev:type>
-					<maml:name>None
-</maml:name>
+					<maml:name>None</maml:name>
 					<maml:uri></maml:uri>
 				</dev:type>
 				<maml:description>
@@ -120,7 +119,7 @@
 					</dev:type>
 					<dev:defaultValue></dev:defaultValue>
 				</command:parameter>
-				<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="1">
+				<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="0">
 					<maml:name>ModulesToCopy</maml:name>
 					<maml:description>
 						<maml:para></maml:para>
@@ -148,7 +147,7 @@
 				</dev:type>
 				<dev:defaultValue></dev:defaultValue>
 			</command:parameter>
-			<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="1">
+			<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="0">
 				<maml:name>ModulesToCopy</maml:name>
 				<maml:description>
 					<maml:para></maml:para>
@@ -165,8 +164,7 @@
 			<!--Inputs-->
 			<command:inputType>
 				<dev:type>
-					<maml:name>None
-</maml:name>
+					<maml:name>None</maml:name>
 					<maml:uri></maml:uri>
 				</dev:type>
 				<maml:description>
@@ -219,8 +217,7 @@
 			<!--Inputs-->
 			<command:inputType>
 				<dev:type>
-					<maml:name>None
-</maml:name>
+					<maml:name>None</maml:name>
 					<maml:uri></maml:uri>
 				</dev:type>
 				<maml:description>
@@ -272,8 +269,7 @@
 			<!--Inputs-->
 			<command:inputType>
 				<dev:type>
-					<maml:name>None
-</maml:name>
+					<maml:name>None</maml:name>
 					<maml:uri></maml:uri>
 				</dev:type>
 				<maml:description>
@@ -422,8 +418,7 @@
 			<!--Inputs-->
 			<command:inputType>
 				<dev:type>
-					<maml:name>None
-</maml:name>
+					<maml:name>None</maml:name>
 					<maml:uri></maml:uri>
 				</dev:type>
 				<maml:description>
@@ -467,7 +462,7 @@
 			<command:syntaxItem parametersetname="__AllParameterSets">
 				<!--NAME: __AllParameterSets-->
 				<maml:name>Initialize-ADTestServer</maml:name>
-				<command:parameter required="true" variableLength="false" globbing="false" pipelineInput="false" position="0">
+				<command:parameter required="true" variableLength="false" globbing="false" pipelineInput="True (ByValue)" position="0">
 					<maml:name>Vm</maml:name>
 					<maml:description>
 						<maml:para></maml:para>
@@ -503,11 +498,47 @@
 					</dev:type>
 					<dev:defaultValue></dev:defaultValue>
 				</command:parameter>
+				<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="named">
+					<maml:name>FeaturesToInstall</maml:name>
+					<maml:description>
+						<maml:para></maml:para>
+					</maml:description>
+					<command:parameterValue required="true" variableLength="false">String[]</command:parameterValue>
+					<dev:type>
+						<maml:name>String[]</maml:name>
+						<maml:uri />
+					</dev:type>
+					<dev:defaultValue></dev:defaultValue>
+				</command:parameter>
+				<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="named">
+					<maml:name>ModulesToCopy</maml:name>
+					<maml:description>
+						<maml:para></maml:para>
+					</maml:description>
+					<command:parameterValue required="true" variableLength="false">String[]</command:parameterValue>
+					<dev:type>
+						<maml:name>String[]</maml:name>
+						<maml:uri />
+					</dev:type>
+					<dev:defaultValue></dev:defaultValue>
+				</command:parameter>
+				<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="named">
+					<maml:name>DomainName</maml:name>
+					<maml:description>
+						<maml:para></maml:para>
+					</maml:description>
+					<command:parameterValue required="true" variableLength="false">String</command:parameterValue>
+					<dev:type>
+						<maml:name>String</maml:name>
+						<maml:uri />
+					</dev:type>
+					<dev:defaultValue></dev:defaultValue>
+				</command:parameter>
 			</command:syntaxItem>
 		</command:syntax>
 		<command:parameters>
 			<!--All Parameters-->
-			<command:parameter required="true" variableLength="false" globbing="false" pipelineInput="false" position="0">
+			<command:parameter required="true" variableLength="false" globbing="false" pipelineInput="True (ByValue)" position="0">
 				<maml:name>Vm</maml:name>
 				<maml:description>
 					<maml:para></maml:para>
@@ -543,13 +574,48 @@
 				</dev:type>
 				<dev:defaultValue></dev:defaultValue>
 			</command:parameter>
+			<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="named">
+				<maml:name>FeaturesToInstall</maml:name>
+				<maml:description>
+					<maml:para></maml:para>
+				</maml:description>
+				<command:parameterValue required="true" variableLength="false">String[]</command:parameterValue>
+				<dev:type>
+					<maml:name>String[]</maml:name>
+					<maml:uri />
+				</dev:type>
+				<dev:defaultValue></dev:defaultValue>
+			</command:parameter>
+			<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="named">
+				<maml:name>ModulesToCopy</maml:name>
+				<maml:description>
+					<maml:para></maml:para>
+				</maml:description>
+				<command:parameterValue required="true" variableLength="false">String[]</command:parameterValue>
+				<dev:type>
+					<maml:name>String[]</maml:name>
+					<maml:uri />
+				</dev:type>
+				<dev:defaultValue></dev:defaultValue>
+			</command:parameter>
+			<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="named">
+				<maml:name>DomainName</maml:name>
+				<maml:description>
+					<maml:para></maml:para>
+				</maml:description>
+				<command:parameterValue required="true" variableLength="false">String</command:parameterValue>
+				<dev:type>
+					<maml:name>String</maml:name>
+					<maml:uri />
+				</dev:type>
+				<dev:defaultValue></dev:defaultValue>
+			</command:parameter>
 		</command:parameters>
 		<command:inputTypes>
 			<!--Inputs-->
 			<command:inputType>
 				<dev:type>
-					<maml:name>None
-</maml:name>
+					<maml:name>None</maml:name>
 					<maml:uri></maml:uri>
 				</dev:type>
 				<maml:description>
@@ -650,8 +716,7 @@
 			<!--Inputs-->
 			<command:inputType>
 				<dev:type>
-					<maml:name>None
-</maml:name>
+					<maml:name>None</maml:name>
 					<maml:uri></maml:uri>
 				</dev:type>
 				<maml:description>
@@ -707,7 +772,7 @@
 					</dev:type>
 					<dev:defaultValue></dev:defaultValue>
 				</command:parameter>
-				<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="1">
+				<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="named">
 					<maml:name>FeaturesToInstall</maml:name>
 					<maml:description>
 						<maml:para></maml:para>
@@ -735,7 +800,7 @@
 				</dev:type>
 				<dev:defaultValue></dev:defaultValue>
 			</command:parameter>
-			<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="1">
+			<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="named">
 				<maml:name>FeaturesToInstall</maml:name>
 				<maml:description>
 					<maml:para></maml:para>
@@ -752,8 +817,7 @@
 			<!--Inputs-->
 			<command:inputType>
 				<dev:type>
-					<maml:name>None
-</maml:name>
+					<maml:name>None</maml:name>
 					<maml:uri></maml:uri>
 				</dev:type>
 				<maml:description>
@@ -773,6 +837,107 @@
 				</maml:description>
 			</command:returnValue>
 		</command:returnValues>
+	</command:command>
+	<command:command xmlns:maml="http://schemas.microsoft.com/maml/2004/10" xmlns:command="http://schemas.microsoft.com/maml/dev/command/2004/10" xmlns:dev="http://schemas.microsoft.com/maml/dev/2004/10">
+		<!--TAG: HASCOMMONPARAMETERS-->
+		<!--Command-->
+		<command:details>
+			<command:name>Join-ADTestServer</command:name>
+			<maml:description>
+				<maml:para></maml:para>
+			</maml:description>
+			<maml:copyright>
+				<maml:para></maml:para>
+			</maml:copyright>
+			<command:verb>Join</command:verb>
+			<command:noun>ADTestServer</command:noun>
+			<dev:version />
+		</command:details>
+		<maml:description>
+			<maml:para></maml:para>
+		</maml:description>
+		<command:syntax>
+			<!--Parameter Sets-->
+			<command:syntaxItem parametersetname="__AllParameterSets">
+				<!--NAME: __AllParameterSets-->
+				<maml:name>Join-ADTestServer</maml:name>
+				<command:parameter required="true" variableLength="false" globbing="false" pipelineInput="false" position="0">
+					<maml:name>Vm</maml:name>
+					<maml:description>
+						<maml:para></maml:para>
+					</maml:description>
+					<command:parameterValue required="true" variableLength="false">Object</command:parameterValue>
+					<dev:type>
+						<maml:name>Object</maml:name>
+						<maml:uri />
+					</dev:type>
+					<dev:defaultValue></dev:defaultValue>
+				</command:parameter>
+				<command:parameter required="true" variableLength="false" globbing="false" pipelineInput="false" position="1">
+					<maml:name>DomainName</maml:name>
+					<maml:description>
+						<maml:para></maml:para>
+					</maml:description>
+					<command:parameterValue required="true" variableLength="false">String</command:parameterValue>
+					<dev:type>
+						<maml:name>String</maml:name>
+						<maml:uri />
+					</dev:type>
+					<dev:defaultValue></dev:defaultValue>
+				</command:parameter>
+				<command:parameter required="true" variableLength="false" globbing="false" pipelineInput="false" position="2">
+					<maml:name>ComputerName</maml:name>
+					<maml:description>
+						<maml:para></maml:para>
+					</maml:description>
+					<command:parameterValue required="true" variableLength="false">String</command:parameterValue>
+					<dev:type>
+						<maml:name>String</maml:name>
+						<maml:uri />
+					</dev:type>
+					<dev:defaultValue></dev:defaultValue>
+				</command:parameter>
+			</command:syntaxItem>
+		</command:syntax>
+		<command:parameters>
+			<!--All Parameters-->
+			<command:parameter required="true" variableLength="false" globbing="false" pipelineInput="false" position="0">
+				<maml:name>Vm</maml:name>
+				<maml:description>
+					<maml:para></maml:para>
+				</maml:description>
+				<command:parameterValue required="true" variableLength="false">Object</command:parameterValue>
+				<dev:type>
+					<maml:name>Object</maml:name>
+					<maml:uri />
+				</dev:type>
+				<dev:defaultValue></dev:defaultValue>
+			</command:parameter>
+			<command:parameter required="true" variableLength="false" globbing="false" pipelineInput="false" position="1">
+				<maml:name>DomainName</maml:name>
+				<maml:description>
+					<maml:para></maml:para>
+				</maml:description>
+				<command:parameterValue required="true" variableLength="false">String</command:parameterValue>
+				<dev:type>
+					<maml:name>String</maml:name>
+					<maml:uri />
+				</dev:type>
+				<dev:defaultValue></dev:defaultValue>
+			</command:parameter>
+			<command:parameter required="true" variableLength="false" globbing="false" pipelineInput="false" position="2">
+				<maml:name>ComputerName</maml:name>
+				<maml:description>
+					<maml:para></maml:para>
+				</maml:description>
+				<command:parameterValue required="true" variableLength="false">String</command:parameterValue>
+				<dev:type>
+					<maml:name>String</maml:name>
+					<maml:uri />
+				</dev:type>
+				<dev:defaultValue></dev:defaultValue>
+			</command:parameter>
+		</command:parameters>
 	</command:command>
 	<command:command xmlns:maml="http://schemas.microsoft.com/maml/2004/10" xmlns:command="http://schemas.microsoft.com/maml/dev/command/2004/10" xmlns:dev="http://schemas.microsoft.com/maml/dev/2004/10">
 		<!--TAG: HASCOMMONPARAMETERS-->
@@ -812,7 +977,7 @@
 				<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="1">
 					<maml:name>DomainName</maml:name>
 					<maml:description>
-						<maml:para>Specifies the number of DCs to create in the domain. This value is not contained in the configuration file.</maml:para>
+						<maml:para>Specifies the name of the domain to create in DNS name format, e.g. foo.local</maml:para>
 					</maml:description>
 					<command:parameterValue required="true" variableLength="false">String</command:parameterValue>
 					<dev:type>
@@ -836,7 +1001,7 @@
 				<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="3">
 					<maml:name>IPAddressPattern</maml:name>
 					<maml:description>
-						<maml:para>A C# format string that specifies the pattern to use when generating IP addresses for domain controllers. The format string can include a single replacement parameter as defined for the String.Format() function in https://docs.microsoft.com/en-us/dotnet/api/system.string.format?view=netframework-4.8.</maml:para>
+						<maml:para>A C# format string that specifies the pattern to use when generating IP addresses for domain controllers. The format string can include a single replacement parameter as defined for the String.Format() function in https://docs.microsoft.com/en-us/dotnet/api/system.string.format?view=netframework-4.8. The command will substitute the ordinal number + 1 of the machine being created for the replacement parameter when generating the IP address for that machine. For instance, if the pattern is "10.1.0.{0}", the first DC will be assigned IP address 10.1.0.1, the second DC 10.1.0.2, etc.</maml:para>
 					</maml:description>
 					<command:parameterValue required="true" variableLength="false">String</command:parameterValue>
 					<dev:type>
@@ -848,19 +1013,31 @@
 				<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="4">
 					<maml:name>ForestMode</maml:name>
 					<maml:description>
-						<maml:para></maml:para>
+						<maml:para>A string specifying the forest functional level to create the forest with, as defined for the -ForestMode parameter of the New-ADDSForest command. Allowed values are:
+* Windows Server 2003: 2 or Win2003
+* Windows Server 2008: 3 or Win2008
+* Windows Server 2008 R2: 4 or Win2008R2
+* Windows Server 2012: 5 or Win2012
+* Windows Server 2012 R2: 6 or Win2012R2
+* Windows Server 2016: 7 or WinThreshold</maml:para>
 					</maml:description>
 					<command:parameterValue required="true" variableLength="false">String</command:parameterValue>
 					<dev:type>
 						<maml:name>String</maml:name>
 						<maml:uri />
 					</dev:type>
-					<dev:defaultValue></dev:defaultValue>
+					<dev:defaultValue>The default value is taken from the current domain configuration file. </dev:defaultValue>
 				</command:parameter>
 				<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="5">
 					<maml:name>DomainMode</maml:name>
 					<maml:description>
-						<maml:para></maml:para>
+						<maml:para>A string specifying the domain functional level to create the domain with, as defined for the -DomainMode parameter of the New-ADDSForest command. Allowed values are:
+Windows Server 2003: 2 or Win2003
+Windows Server 2008: 3 or Win2008
+Windows Server 2008 R2: 4 or Win2008R2
+Windows Server 2012: 5 or Win2012
+Windows Server 2012 R2: 6 or Win2012R2
+Windows Server 2016: 7 or WinThreshold</maml:para>
 					</maml:description>
 					<command:parameterValue required="true" variableLength="false">String</command:parameterValue>
 					<dev:type>
@@ -872,55 +1049,55 @@
 				<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="6">
 					<maml:name>PwdString</maml:name>
 					<maml:description>
-						<maml:para>The clear text password to use as the local Administrator password for servers, the password for the domain Administrator account, and the Directory Service Repair Mode password.</maml:para>
+						<maml:para>The clear text password to use as the local Administrator password for servers, the password for the domain Administrator account, and the Directory Service Repair Mode password. This value must correspond to the Administrator password in the virtual machine base image file. The same password will be used for the local machine administrator, domain administrator, and Directory Service Restore Mode password.</maml:para>
 					</maml:description>
 					<command:parameterValue required="true" variableLength="false">String</command:parameterValue>
 					<dev:type>
 						<maml:name>String</maml:name>
 						<maml:uri />
 					</dev:type>
-					<dev:defaultValue></dev:defaultValue>
+					<dev:defaultValue>The default value is taken from the pwdString value in the current default domain cofiguration file.</dev:defaultValue>
 				</command:parameter>
 				<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="7">
 					<maml:name>ModulesToCopy</maml:name>
 					<maml:description>
-						<maml:para></maml:para>
+						<maml:para>A list of the names of PowerShell modules to copy to the virtual machine. The modules must be installed in the host environment. The command will create a temporary .zip file containing all the modules' files, copy the .zip to the VM, and expand them into the C:\Users\Administrator\Documents\WindowsPowerShell\Module folder (creating it if necessary). It will then import all of the modules so that they can be used in subsequent commands invoked in the VM.</maml:para>
 					</maml:description>
 					<command:parameterValue required="true" variableLength="false">String[]</command:parameterValue>
 					<dev:type>
 						<maml:name>String[]</maml:name>
 						<maml:uri />
 					</dev:type>
-					<dev:defaultValue></dev:defaultValue>
+					<dev:defaultValue>The default is taken from the modulesToCopy value of the current default domain configuration file.</dev:defaultValue>
 				</command:parameter>
 				<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="8">
 					<maml:name>FeaturesToInstall</maml:name>
 					<maml:description>
-						<maml:para></maml:para>
+						<maml:para>A list of the names of the Windows features that should be installed in the virtual machine. The name of the features comes from the Name (not Display Name) column of the output of the Get-WindowsFeature command.</maml:para>
 					</maml:description>
 					<command:parameterValue required="true" variableLength="false">String[]</command:parameterValue>
 					<dev:type>
 						<maml:name>String[]</maml:name>
 						<maml:uri />
 					</dev:type>
-					<dev:defaultValue></dev:defaultValue>
+					<dev:defaultValue>The default value comes from the featuresToInstall value of the current domain configuration file.</dev:defaultValue>
 				</command:parameter>
 				<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="9">
 					<maml:name>FilesToCopy</maml:name>
 					<maml:description>
-						<maml:para></maml:para>
+						<maml:para>A list of files and folders to copy to the virtual machine. The command creates a .zip archive of the files, copies them to the target VM, and then unzips them into the C:\Users\Administrator\Downloads folder, preserving the original folder structure. These files can be used in subsequent command invoked in the VM via the CommandsToRun parameter.</maml:para>
 					</maml:description>
 					<command:parameterValue required="true" variableLength="false">String[]</command:parameterValue>
 					<dev:type>
 						<maml:name>String[]</maml:name>
 						<maml:uri />
 					</dev:type>
-					<dev:defaultValue></dev:defaultValue>
+					<dev:defaultValue>The default</dev:defaultValue>
 				</command:parameter>
 				<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="10">
 					<maml:name>CommandsToRun</maml:name>
 					<maml:description>
-						<maml:para></maml:para>
+						<maml:para>A list of PowerShell commands to run in the VM environment. The commands run in elevated UAC context using the machine Administrator credentials during Initialize-ADTestServer.</maml:para>
 					</maml:description>
 					<command:parameterValue required="true" variableLength="false">String[]</command:parameterValue>
 					<dev:type>
@@ -932,11 +1109,35 @@
 				<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="11">
 					<maml:name>VSwitchName</maml:name>
 					<maml:description>
-						<maml:para></maml:para>
+						<maml:para>The name of the Hyper-V switch to connect the virtual machine to. If the switch doesn't exist, it will be created as an Internal (VM only) switch.</maml:para>
 					</maml:description>
 					<command:parameterValue required="true" variableLength="false">String</command:parameterValue>
 					<dev:type>
 						<maml:name>String</maml:name>
+						<maml:uri />
+					</dev:type>
+					<dev:defaultValue>The default value comes from the vmSwitch value of the current domain configuration file.</dev:defaultValue>
+				</command:parameter>
+				<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="12">
+					<maml:name>BaseImagePath</maml:name>
+					<maml:description>
+						<maml:para>The path to the VHDX file that will serve as the base image for the differencing disk created for the VM. It must have been created as a Generation 2 VM and be in VHDX format.</maml:para>
+					</maml:description>
+					<command:parameterValue required="true" variableLength="false">String</command:parameterValue>
+					<dev:type>
+						<maml:name>String</maml:name>
+						<maml:uri />
+					</dev:type>
+					<dev:defaultValue>The default value comes from the baseImagePath value of the current domain configuration file.</dev:defaultValue>
+				</command:parameter>
+				<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="named">
+					<maml:name>Wait</maml:name>
+					<maml:description>
+						<maml:para>By default, the New-ADTestDomain command creates a set of jobs, one per virtual machine, that run in the background. The Wait switch indicates that the command should wait for the jobs running the background and not continue until all jobs are complete. The -Wait switch also causes the command to display progress data from each of the jobs in the current PowerShell session.</maml:para>
+					</maml:description>
+					<command:parameterValue required="false" variableLength="false">SwitchParameter</command:parameterValue>
+					<dev:type>
+						<maml:name>SwitchParameter</maml:name>
 						<maml:uri />
 					</dev:type>
 					<dev:defaultValue></dev:defaultValue>
@@ -945,7 +1146,7 @@
 		</command:syntax>
 		<command:parameters>
 			<!--All Parameters-->
-			<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="False" position="0">
+			<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="0">
 				<maml:name>DCCount</maml:name>
 				<maml:description>
 					<maml:para>Specifies the number of DCs to create in the domain. This value is not contained in the configuration file.</maml:para>
@@ -960,7 +1161,7 @@
 			<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="False" position="1">
 				<maml:name>DomainName</maml:name>
 				<maml:description>
-					<maml:para>Specifies the number of DCs to create in the domain. This value is not contained in the configuration file.</maml:para>
+					<maml:para>Specifies the name of the domain to create in DNS name format, e.g. foo.local</maml:para>
 				</maml:description>
 				<command:parameterValue required="true" variableLength="false">String</command:parameterValue>
 				<dev:type>
@@ -969,7 +1170,7 @@
 				</dev:type>
 				<dev:defaultValue>The default value is taken from the domainName field of the defaults set with Set-ADTestParameters.</dev:defaultValue>
 			</command:parameter>
-			<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="False" position="2">
+			<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="2">
 				<maml:name>DCNamePattern</maml:name>
 				<maml:description>
 					<maml:para>A C# format string that specifies the pattern to use when generating virtual machine and domain controller names. The format string can include a single replacement parameter as defined for the String.Format() function in https://docs.microsoft.com/en-us/dotnet/api/system.string.format?view=netframework-4.8.</maml:para>
@@ -984,7 +1185,7 @@
 			<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="False" position="3">
 				<maml:name>IPAddressPattern</maml:name>
 				<maml:description>
-					<maml:para>A C# format string that specifies the pattern to use when generating IP addresses for domain controllers. The format string can include a single replacement parameter as defined for the String.Format() function in https://docs.microsoft.com/en-us/dotnet/api/system.string.format?view=netframework-4.8.</maml:para>
+					<maml:para>A C# format string that specifies the pattern to use when generating IP addresses for domain controllers. The format string can include a single replacement parameter as defined for the String.Format() function in https://docs.microsoft.com/en-us/dotnet/api/system.string.format?view=netframework-4.8. The command will substitute the ordinal number + 1 of the machine being created for the replacement parameter when generating the IP address for that machine. For instance, if the pattern is "10.1.0.{0}", the first DC will be assigned IP address 10.1.0.1, the second DC 10.1.0.2, etc.</maml:para>
 				</maml:description>
 				<command:parameterValue required="true" variableLength="false">String</command:parameterValue>
 				<dev:type>
@@ -993,22 +1194,34 @@
 				</dev:type>
 				<dev:defaultValue>The default value is taken from the ipAddressPattern field of the defaults set with Set-ADTestParameters.</dev:defaultValue>
 			</command:parameter>
-			<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="4">
+			<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="False" position="4">
 				<maml:name>ForestMode</maml:name>
 				<maml:description>
-					<maml:para></maml:para>
+					<maml:para>A string specifying the forest functional level to create the forest with, as defined for the -ForestMode parameter of the New-ADDSForest command. Allowed values are:
+* Windows Server 2003: 2 or Win2003
+* Windows Server 2008: 3 or Win2008
+* Windows Server 2008 R2: 4 or Win2008R2
+* Windows Server 2012: 5 or Win2012
+* Windows Server 2012 R2: 6 or Win2012R2
+* Windows Server 2016: 7 or WinThreshold</maml:para>
 				</maml:description>
 				<command:parameterValue required="true" variableLength="false">String</command:parameterValue>
 				<dev:type>
 					<maml:name>String</maml:name>
 					<maml:uri />
 				</dev:type>
-				<dev:defaultValue></dev:defaultValue>
+				<dev:defaultValue>The default value is taken from the forestMode value in the current domain configuration file. </dev:defaultValue>
 			</command:parameter>
-			<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="5">
+			<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="False" position="5">
 				<maml:name>DomainMode</maml:name>
 				<maml:description>
-					<maml:para></maml:para>
+					<maml:para>A string specifying the domain functional level to create the domain with, as defined for the -DomainMode parameter of the New-ADDSForest command. Allowed values are:
+Windows Server 2003: 2 or Win2003
+Windows Server 2008: 3 or Win2008
+Windows Server 2008 R2: 4 or Win2008R2
+Windows Server 2012: 5 or Win2012
+Windows Server 2012 R2: 6 or Win2012R2
+Windows Server 2016: 7 or WinThreshold</maml:para>
 				</maml:description>
 				<command:parameterValue required="true" variableLength="false">String</command:parameterValue>
 				<dev:type>
@@ -1020,71 +1233,95 @@
 			<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="False" position="6">
 				<maml:name>PwdString</maml:name>
 				<maml:description>
-					<maml:para>The clear text password to use as the local Administrator password for servers, the password for the domain Administrator account, and the Directory Service Repair Mode password.</maml:para>
+					<maml:para>The clear text password to use as the local Administrator password for servers, the password for the domain Administrator account, and the Directory Service Repair Mode password. This value must correspond to the Administrator password in the virtual machine base image file. The same password will be used for the local machine administrator, domain administrator, and Directory Service Restore Mode password.</maml:para>
 				</maml:description>
 				<command:parameterValue required="true" variableLength="false">String</command:parameterValue>
 				<dev:type>
 					<maml:name>String</maml:name>
 					<maml:uri />
 				</dev:type>
-				<dev:defaultValue></dev:defaultValue>
+				<dev:defaultValue>The default value is taken from the pwdString value in the current default domain cofiguration file.</dev:defaultValue>
 			</command:parameter>
-			<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="7">
+			<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="False" position="7">
 				<maml:name>ModulesToCopy</maml:name>
 				<maml:description>
-					<maml:para></maml:para>
+					<maml:para>A list of the names of PowerShell modules to copy to the virtual machine. The modules must be installed in the host environment. The command will create a temporary .zip file containing all the modules' files, copy the .zip to the VM, and expand them into the C:\Users\Administrator\Documents\WindowsPowerShell\Module folder (creating it if necessary). It will then import all of the modules so that they can be used in subsequent commands invoked in the VM.</maml:para>
 				</maml:description>
 				<command:parameterValue required="true" variableLength="false">String[]</command:parameterValue>
 				<dev:type>
 					<maml:name>String[]</maml:name>
 					<maml:uri />
 				</dev:type>
-				<dev:defaultValue></dev:defaultValue>
+				<dev:defaultValue>The default is taken from the modulesToCopy value of the current default domain configuration file.</dev:defaultValue>
 			</command:parameter>
-			<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="8">
+			<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="False" position="8">
 				<maml:name>FeaturesToInstall</maml:name>
 				<maml:description>
-					<maml:para></maml:para>
+					<maml:para>A list of the names of the Windows features that should be installed in the virtual machine. The name of the features comes from the Name (not Display Name) column of the output of the Get-WindowsFeature command.</maml:para>
 				</maml:description>
 				<command:parameterValue required="true" variableLength="false">String[]</command:parameterValue>
 				<dev:type>
 					<maml:name>String[]</maml:name>
 					<maml:uri />
 				</dev:type>
-				<dev:defaultValue></dev:defaultValue>
+				<dev:defaultValue>The default value comes from the featuresToInstall value of the current domain configuration file.</dev:defaultValue>
 			</command:parameter>
-			<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="9">
+			<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="False" position="9">
 				<maml:name>FilesToCopy</maml:name>
 				<maml:description>
-					<maml:para></maml:para>
+					<maml:para>A list of files and folders to copy to the virtual machine. The command creates a .zip archive of the files, copies them to the target VM, and then unzips them into the C:\Users\Administrator\Downloads folder, preserving the original folder structure. These files can be used in subsequent command invoked in the VM via the CommandsToRun parameter.</maml:para>
 				</maml:description>
 				<command:parameterValue required="true" variableLength="false">String[]</command:parameterValue>
 				<dev:type>
 					<maml:name>String[]</maml:name>
 					<maml:uri />
 				</dev:type>
-				<dev:defaultValue></dev:defaultValue>
+				<dev:defaultValue>The default value comes from the filesToCopy value of the current domain configuration file.</dev:defaultValue>
 			</command:parameter>
 			<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="False" position="10">
 				<maml:name>CommandsToRun</maml:name>
 				<maml:description>
-					<maml:para></maml:para>
+					<maml:para>A list of PowerShell commands to run in the VM environment. The commands run in elevated UAC context using the machine Administrator credentials during Initialize-ADTestServer.</maml:para>
 				</maml:description>
 				<command:parameterValue required="true" variableLength="false">String[]</command:parameterValue>
 				<dev:type>
 					<maml:name>String[]</maml:name>
 					<maml:uri />
 				</dev:type>
-				<dev:defaultValue>The default value is taken from the vSwitchName field of the defaults set with Set-ADTestParameters.</dev:defaultValue>
+				<dev:defaultValue>The default value comes from the commandsToRun value of the current domain configuration file.</dev:defaultValue>
 			</command:parameter>
-			<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="11">
+			<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="False" position="11">
 				<maml:name>VSwitchName</maml:name>
 				<maml:description>
-					<maml:para></maml:para>
+					<maml:para>The name of the Hyper-V switch to connect the virtual machine to. If the switch doesn't exist, it will be created as an Internal (VM only) switch.</maml:para>
 				</maml:description>
 				<command:parameterValue required="true" variableLength="false">String</command:parameterValue>
 				<dev:type>
 					<maml:name>String</maml:name>
+					<maml:uri />
+				</dev:type>
+				<dev:defaultValue>The default value comes from the vmSwitch value of the current domain configuration file.</dev:defaultValue>
+			</command:parameter>
+			<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="False" position="12">
+				<maml:name>BaseImagePath</maml:name>
+				<maml:description>
+					<maml:para>The path to the VHDX file that will serve as the base image for the differencing disk created for the VM. It must have been created as a Generation 2 VM and be in VHDX format.</maml:para>
+				</maml:description>
+				<command:parameterValue required="true" variableLength="false">String</command:parameterValue>
+				<dev:type>
+					<maml:name>String</maml:name>
+					<maml:uri />
+				</dev:type>
+				<dev:defaultValue>The default value comes from the baseImagePath value of the current domain configuration file.</dev:defaultValue>
+			</command:parameter>
+			<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="False" position="named">
+				<maml:name>Wait</maml:name>
+				<maml:description>
+					<maml:para>By default, the New-ADTestDomain command creates a set of jobs, one per virtual machine, that run in the background. The Wait switch indicates that the command should wait for the jobs running the background and not continue until all jobs are complete. The -Wait switch also causes the command to display progress data from each of the jobs in the current PowerShell session.</maml:para>
+				</maml:description>
+				<command:parameterValue required="false" variableLength="false">SwitchParameter</command:parameterValue>
+				<dev:type>
+					<maml:name>SwitchParameter</maml:name>
 					<maml:uri />
 				</dev:type>
 				<dev:defaultValue></dev:defaultValue>
@@ -1094,8 +1331,7 @@
 			<!--Inputs-->
 			<command:inputType>
 				<dev:type>
-					<maml:name>None
-</maml:name>
+					<maml:name>None</maml:name>
 					<maml:uri></maml:uri>
 				</dev:type>
 				<maml:description>
@@ -1316,8 +1552,7 @@
 			<!--Inputs-->
 			<command:inputType>
 				<dev:type>
-					<maml:name>None
-</maml:name>
+					<maml:name>None</maml:name>
 					<maml:uri></maml:uri>
 				</dev:type>
 				<maml:description>
@@ -1370,8 +1605,7 @@
 			<!--Inputs-->
 			<command:inputType>
 				<dev:type>
-					<maml:name>None
-</maml:name>
+					<maml:name>None</maml:name>
 					<maml:uri></maml:uri>
 				</dev:type>
 				<maml:description>
@@ -1448,8 +1682,7 @@
 			<!--Inputs-->
 			<command:inputType>
 				<dev:type>
-					<maml:name>None
-</maml:name>
+					<maml:name>None</maml:name>
 					<maml:uri></maml:uri>
 				</dev:type>
 				<maml:description>
@@ -1469,6 +1702,83 @@
 				</maml:description>
 			</command:returnValue>
 		</command:returnValues>
+	</command:command>
+	<command:command xmlns:maml="http://schemas.microsoft.com/maml/2004/10" xmlns:command="http://schemas.microsoft.com/maml/dev/command/2004/10" xmlns:dev="http://schemas.microsoft.com/maml/dev/2004/10">
+		<!--TAG: HASCOMMONPARAMETERS-->
+		<!--Command-->
+		<command:details>
+			<command:name>Rename-ADTestServer</command:name>
+			<maml:description>
+				<maml:para></maml:para>
+			</maml:description>
+			<maml:copyright>
+				<maml:para></maml:para>
+			</maml:copyright>
+			<command:verb>Rename</command:verb>
+			<command:noun>ADTestServer</command:noun>
+			<dev:version />
+		</command:details>
+		<maml:description>
+			<maml:para></maml:para>
+		</maml:description>
+		<command:syntax>
+			<!--Parameter Sets-->
+			<command:syntaxItem parametersetname="__AllParameterSets">
+				<!--NAME: __AllParameterSets-->
+				<maml:name>Rename-ADTestServer</maml:name>
+				<command:parameter required="true" variableLength="false" globbing="false" pipelineInput="false" position="0">
+					<maml:name>Vm</maml:name>
+					<maml:description>
+						<maml:para></maml:para>
+					</maml:description>
+					<command:parameterValue required="true" variableLength="false">Object</command:parameterValue>
+					<dev:type>
+						<maml:name>Object</maml:name>
+						<maml:uri />
+					</dev:type>
+					<dev:defaultValue></dev:defaultValue>
+				</command:parameter>
+				<command:parameter required="true" variableLength="false" globbing="false" pipelineInput="false" position="1">
+					<maml:name>ComputerName</maml:name>
+					<maml:description>
+						<maml:para></maml:para>
+					</maml:description>
+					<command:parameterValue required="true" variableLength="false">String</command:parameterValue>
+					<dev:type>
+						<maml:name>String</maml:name>
+						<maml:uri />
+					</dev:type>
+					<dev:defaultValue></dev:defaultValue>
+				</command:parameter>
+			</command:syntaxItem>
+		</command:syntax>
+		<command:parameters>
+			<!--All Parameters-->
+			<command:parameter required="true" variableLength="false" globbing="false" pipelineInput="false" position="0">
+				<maml:name>Vm</maml:name>
+				<maml:description>
+					<maml:para></maml:para>
+				</maml:description>
+				<command:parameterValue required="true" variableLength="false">Object</command:parameterValue>
+				<dev:type>
+					<maml:name>Object</maml:name>
+					<maml:uri />
+				</dev:type>
+				<dev:defaultValue></dev:defaultValue>
+			</command:parameter>
+			<command:parameter required="true" variableLength="false" globbing="false" pipelineInput="false" position="1">
+				<maml:name>ComputerName</maml:name>
+				<maml:description>
+					<maml:para></maml:para>
+				</maml:description>
+				<command:parameterValue required="true" variableLength="false">String</command:parameterValue>
+				<dev:type>
+					<maml:name>String</maml:name>
+					<maml:uri />
+				</dev:type>
+				<dev:defaultValue></dev:defaultValue>
+			</command:parameter>
+		</command:parameters>
 	</command:command>
 	<command:command xmlns:maml="http://schemas.microsoft.com/maml/2004/10" xmlns:command="http://schemas.microsoft.com/maml/dev/command/2004/10" xmlns:dev="http://schemas.microsoft.com/maml/dev/2004/10">
 		<!--TAG: HASCOMMONPARAMETERS-->
@@ -1550,8 +1860,7 @@
 			<!--Inputs-->
 			<command:inputType>
 				<dev:type>
-					<maml:name>None
-</maml:name>
+					<maml:name>None</maml:name>
 					<maml:uri></maml:uri>
 				</dev:type>
 				<maml:description>
@@ -1628,8 +1937,7 @@
 			<!--Inputs-->
 			<command:inputType>
 				<dev:type>
-					<maml:name>None
-</maml:name>
+					<maml:name>None</maml:name>
 					<maml:uri></maml:uri>
 				</dev:type>
 				<maml:description>
@@ -1754,8 +2062,7 @@
 			<!--Inputs-->
 			<command:inputType>
 				<dev:type>
-					<maml:name>None
-</maml:name>
+					<maml:name>None</maml:name>
 					<maml:uri></maml:uri>
 				</dev:type>
 				<maml:description>
@@ -1808,8 +2115,7 @@
 			<!--Inputs-->
 			<command:inputType>
 				<dev:type>
-					<maml:name>None
-</maml:name>
+					<maml:name>None</maml:name>
 					<maml:uri></maml:uri>
 				</dev:type>
 				<maml:description>
@@ -1862,86 +2168,7 @@
 			<!--Inputs-->
 			<command:inputType>
 				<dev:type>
-					<maml:name>None
-</maml:name>
-					<maml:uri></maml:uri>
-				</dev:type>
-				<maml:description>
-					<maml:para></maml:para>
-				</maml:description>
-			</command:inputType>
-		</command:inputTypes>
-		<command:returnValues>
-			<!--Outputs-->
-			<command:returnValue>
-				<dev:type>
-					<maml:name>System.Object</maml:name>
-					<maml:uri></maml:uri>
-				</dev:type>
-				<maml:description>
-					<maml:para></maml:para>
-				</maml:description>
-			</command:returnValue>
-		</command:returnValues>
-	</command:command>
-	<command:command xmlns:maml="http://schemas.microsoft.com/maml/2004/10" xmlns:command="http://schemas.microsoft.com/maml/dev/command/2004/10" xmlns:dev="http://schemas.microsoft.com/maml/dev/2004/10">
-		<!--TAG: HASCOMMONPARAMETERS-->
-		<!--Command-->
-		<command:details>
-			<command:name>Wait-ForDomainAvailable</command:name>
-			<maml:description>
-				<maml:para></maml:para>
-			</maml:description>
-			<maml:copyright>
-				<maml:para></maml:para>
-			</maml:copyright>
-			<command:verb>Wait</command:verb>
-			<command:noun>ForDomainAvailable</command:noun>
-			<dev:version />
-		</command:details>
-		<maml:description>
-			<maml:para></maml:para>
-		</maml:description>
-		<command:syntax>
-			<!--Parameter Sets-->
-			<command:syntaxItem parametersetname="__AllParameterSets">
-				<!--NAME: __AllParameterSets-->
-				<maml:name>Wait-ForDomainAvailable</maml:name>
-				<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="0">
-					<maml:name>DomainName</maml:name>
-					<maml:description>
-						<maml:para></maml:para>
-					</maml:description>
-					<command:parameterValue required="true" variableLength="false">String</command:parameterValue>
-					<dev:type>
-						<maml:name>String</maml:name>
-						<maml:uri />
-					</dev:type>
-					<dev:defaultValue></dev:defaultValue>
-				</command:parameter>
-			</command:syntaxItem>
-		</command:syntax>
-		<command:parameters>
-			<!--All Parameters-->
-			<command:parameter required="false" variableLength="false" globbing="false" pipelineInput="false" position="0">
-				<maml:name>DomainName</maml:name>
-				<maml:description>
-					<maml:para></maml:para>
-				</maml:description>
-				<command:parameterValue required="true" variableLength="false">String</command:parameterValue>
-				<dev:type>
-					<maml:name>String</maml:name>
-					<maml:uri />
-				</dev:type>
-				<dev:defaultValue></dev:defaultValue>
-			</command:parameter>
-		</command:parameters>
-		<command:inputTypes>
-			<!--Inputs-->
-			<command:inputType>
-				<dev:type>
-					<maml:name>None
-</maml:name>
+					<maml:name>None</maml:name>
 					<maml:uri></maml:uri>
 				</dev:type>
 				<maml:description>

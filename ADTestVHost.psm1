@@ -4,18 +4,18 @@
 # The new environment doesn't share any context with the existing one (other than say the file system). Global variables, script variables, loaded modules, etc. don't
 # exist in the new context. And when you use Invoke-Command on a VM or on a remote machine, the commands and modules you use might not even exsit there.
 # The only context sharing is through the parameter list, or through the $using prefix, which only appears to work for local variables.
-# Install-Module -Name ThreadJob -RequiredVersion 1.0
-# Sysprep image must use .VHDX
-# Base image not parameterized
 # Provide details on name formatting
 # Set/Get-ADTestParameters needs to reset after change to file
 # Gen1 vs. Gen2
 # Differencing disk vs. copies
 # Computer\HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon set to 0
-# Maybe not install features? More flexible
-# Move rename to initialize... don't worry about reboot
-# Provide a way to create servers, domain-joined or not from same image
+# Install DC features in Initialize-ADTestDC, not in Initialize-ADTestServer
+# Make gateway, dns setable in Initialize-ADTestServer
+# implement multi-domain forest support
 
+
+
+# .EXTERNALHELP ADTestVHost.psm1-Help.xml
 Function Get-ADTestParameters {
 #    if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
 #    }
@@ -28,6 +28,7 @@ Function Get-ADTestParameters {
     return $global:_ADTestParameters
 }
 
+# .EXTERNALHELP ADTestVHost.psm1-Help.xml
 Function Set-ADTestParameters {
     [CmdletBinding()]
     Param(
@@ -43,6 +44,7 @@ Function Set-ADTestParameters {
     }
 }
 
+# .EXTERNALHELP ADTestVHost.psm1-Help.xml
 Function New-ADTestDomain {
     [CmdletBinding()]
     Param(
@@ -117,6 +119,7 @@ Function New-ADTestDomain {
     }
 }
 
+# .EXTERNALHELP ADTestVHost.psm1-Help.xml
 Function Initialize-ADTestFirstDC {
     [CmdletBinding()]
     Param(
@@ -139,6 +142,7 @@ Function Initialize-ADTestFirstDC {
     }
 }
 
+# .EXTERNALHELP ADTestVHost.psm1-Help.xml
 Function Initialize-ADTestSubsequentDC {
     Param(
         [Parameter(Mandatory=$True, Position=0)]$Vm,
@@ -161,6 +165,7 @@ Function Initialize-ADTestSubsequentDC {
     }
 }
 
+# .EXTERNALHELP ADTestVHost.psm1-Help.xml
 Function Get-ADTestSecurePassword {
     [CmdletBinding()]
     Param(
@@ -169,6 +174,7 @@ Function Get-ADTestSecurePassword {
     return ConvertTo-SecureString $PwdString -AsPlainText -Force
 }
 
+# .EXTERNALHELP ADTestVHost.psm1-Help.xml
 Function New-ADTestServerSession {
     [CmdletBinding()]
     Param(
@@ -181,6 +187,7 @@ Function New-ADTestServerSession {
     return New-PSSession -VMId $Vm.Id -Credential $cred
 }
 
+# .EXTERNALHELP ADTestVHost.psm1-Help.xml
 Function Set-ADTestServerNetworking {
     [CmdletBinding()]
     Param(
@@ -207,6 +214,7 @@ Function Set-ADTestServerNetworking {
     Remove-PSSession $pss
 }
 
+# .EXTERNALHELP ADTestVHost.psm1-Help.xml
 Function Install-ADTestServerFeatures {
     [CmdletBinding()]
     Param(
@@ -236,6 +244,31 @@ Function Install-ADTestServerFeatures {
     Remove-PSSession $pss
 }
 
+# .EXTERNALHELP ADTestVHost.psm1-Help.xml
+Function Copy-ADTestServerFiles {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory=$True, Position=0)]$Vm,
+        [Parameter(Position=0)][String[]]$FilesToCopy = (Get-ADTestParameters).FilesToCopy
+    )
+    Write-Verbose "Copy files for $($Vm.Name) $($FilesToCopy -join ',')"
+    if($FilesToCopy.Count -gt 0){ # Make sure there is something copy
+        $FilesToCopy.ForEach({
+            if(Test-Path -Path $_ -PathType Container){ # If its a folder, create the folder in the VM and recurse
+                (Get-ChildItem $_).ForEach({
+                    Copy-ADTestServerFiles -Vm $Vm -FilesToCopy @(,$_.FullName)
+                })
+            }
+            elseif(Test-Path -Path $_ -PathType Leaf) {
+                $sourcePath = (Get-Item $_).FullName
+                $destPath = "C:\Users\Administrator\Downloads\$(Split-Path $sourcePath -NoQualifier)"
+                Copy-VMFile -Name $vm.Name -SourcePath $sourcePath -DestinationPath $destPath -FileSource Host -CreateFullPath
+            }
+        })
+    }
+}
+
+# .EXTERNALHELP ADTestVHost.psm1-Help.xml
 Function Copy-ADTestServerModules {
     [CmdletBinding()]
     Param(
@@ -282,6 +315,25 @@ Function Copy-ADTestServerModules {
     Remove-PSSession $pss
 }
 
+# .EXTERNALHELP ADTestVHost.psm1-Help.xml
+Function Invoke-ADTestServerCommands {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory=$True, Position=0, ValueFromPipeline=$True)]$Vm,
+        [Parameter(Mandatory=$True, Position=1)][ScriptBlock[]]$CommandsToRun
+    )
+    Write-Verbose "Invoke commands for $($Vm.Name) $($CommandsToRun -join '`n')"
+
+    if($CommandsToRun.Count -gt 0){
+        $pss = New-ADTestServerSession -Vm $Vm
+        $CommandsToRun.ForEach({
+            Invoke-Command -Session $pss -ScriptBlock $_
+        })
+        Remove-PSSession $pss
+    }
+}
+
+# .EXTERNALHELP ADTestVHost.psm1-Help.xml
 Function Initialize-ADTestServer {
     [CmdletBinding()]
     Param(
@@ -305,23 +357,24 @@ Function Initialize-ADTestServer {
     Copy-ADTestServerModules -Vm $Vm -ModulesToCopy $ModulesToCopy
 
     # This is where to copy other files and applications that need to be installed
-    # Copy-ADTestServerFiles -Vm $Vm -FilesToCopy (Get-ADTestParameters).FilesToCopy
+    Copy-ADTestServerFiles -Vm $Vm -FilesToCopy (Get-ADTestParameters).FilesToCopy
 
     # This is where to invoke additional commands
-    # Invoke-ADTestServerCommands -Vm $Vm -CommandsToRun (Get-ADTestParameters).CommandsToRun
+    Invoke-ADTestServerCommands -Vm $Vm -CommandsToRun (Get-ADTestParameters).CommandsToRun
 
     if(-not [String]::IsNullOrEmpty($DomainName)){
         Write-Progress -Activity "Initializing VM as test server" -PercentComplete 80 -CurrentOperation "Joining server to domain"
-        Join-ADTestServer -Vm $Vm -DomainName $DomainName -ComputerName $vm.Name
+        Join-ADTestServer -Vm $Vm -DomainName $DomainName -ComputerName $vm.Name -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent)
     }
     else {
         Write-Progress -Activity "Initializing VM as test server" -PercentComplete 80 -CurrentOperation "Renaming computer"
-        Rename-ADTestServer -Vm $Vm -ComputerName $vm.Name
+        Rename-ADTestServer -Vm $Vm -ComputerName $vm.Name -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent)
     }
 
     return $vm
 }
 
+# .EXTERNALHELP ADTestVHost.psm1-Help.xml
 Function Rename-ADTestServer {
     [CmdletBinding()]
     Param(
@@ -346,6 +399,7 @@ Function Rename-ADTestServer {
     Wait-VM -VM $Vm -For Heartbeat
 }
 
+# .EXTERNALHELP ADTestVHost.psm1-Help.xml
 Function Join-ADTestServer {
     [CmdletBinding()]
     Param(
@@ -376,6 +430,7 @@ Function Join-ADTestServer {
     Wait-VM -VM $Vm -For Reboot
     Wait-VM -VM $Vm -For Heartbeat
 }
+# .EXTERNALHELP ADTestVHost.psm1-Help.xml
 Function New-ADTestServer {
     [CmdletBinding()]
     Param(
@@ -418,6 +473,7 @@ Function New-ADTestServer {
     return $vm
 }
 
+# .EXTERNALHELP ADTestVHost.psm1-Help.xml
 Function Get-ADTestDCNames {
     [CmdletBinding()]
     param()
@@ -427,6 +483,7 @@ Function Get-ADTestDCNames {
     # This ensures that an empty set (no matching names) is not processed
 }
 
+# .EXTERNALHELP ADTestVHost.psm1-Help.xml
 Function Stop-ADTestDCs {
     [CmdletBinding()]
     param()
@@ -448,6 +505,7 @@ Function Stop-ADTestDCs {
     } while($stillRunning -and ($null -eq (Start-Sleep 1)))
 }
 
+# .EXTERNALHELP ADTestVHost.psm1-Help.xml
 Function Reset-ADTestDCs {
     [CmdletBinding()]
     param(
@@ -464,6 +522,7 @@ Function Reset-ADTestDCs {
     }
 }
 
+# .EXTERNALHELP ADTestVHost.psm1-Help.xml
 Function Start-ADTestDCs {
     [CmdletBinding()]
     param()
@@ -473,6 +532,7 @@ Function Start-ADTestDCs {
     })
 }
 
+# .EXTERNALHELP ADTestVHost.psm1-Help.xml
 Function Checkpoint-ADTestDCs {
     [CmdletBinding()]
     param(
@@ -484,6 +544,7 @@ Function Checkpoint-ADTestDCs {
     Start-ADTestDCs -Verbose:([bool]$PSBoundParameters["Verbose"].IsPresent)
 }
 
+# .EXTERNALHELP ADTestVHost.psm1-Help.xml
 Function Remove-ADTestDCs {
     [CmdletBinding()]
     param()
@@ -492,6 +553,7 @@ Function Remove-ADTestDCs {
     Remove-ADTestServer -ServerNames (Get-ADTestDCNames) -Verbose:([bool]$PSBoundParameters["Verbose"].IsPresent)
 }
 
+# .EXTERNALHELP ADTestVHost.psm1-Help.xml
 Function Remove-ADTestServer {
     [CmdletBinding()]
     param(
