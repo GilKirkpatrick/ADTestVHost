@@ -10,7 +10,7 @@
     "pwdString" : "!@#123qwe",
     "modulesToCopy" : [],
     "featuresToInstall" : [],
-    "filesToCopy" : [],
+    "filesToCopy" : {},
     "commandsToRun" : [],
     "parentDomain" : ""
 }

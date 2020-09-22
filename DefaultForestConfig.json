@@ -1,0 +1,17 @@
+{
+    "hyperv": {
+    },
+    "forest": {
+        "domains": [{
+            "fqdn": "foo.local",
+            "netbiosname": "FOO",
+            "numDCs": 2,
+            "numServers": 2
+        },
+        {
+            "fqdn": "bar.foo.local",
+            "netbiosname": "BAR",
+            "numDCs": 2
+        }
+    ]}
+}

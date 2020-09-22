@@ -52,15 +52,17 @@ Function New-ADTestDomain {
         [Parameter()][String]$DomainName = (Get-ADTestParameters).DomainName,
         [Parameter()][String]$DCNamePattern = (Get-ADTestParameters).DCNamePattern,
         [Parameter()][String]$IPAddressPattern = (Get-ADTestParameters).IPAddressPattern,
-        [Parameter()][String]$ForestMode = (Get-ADTestParameters).ForestMode,
-        [Parameter()][String]$DomainMode = (Get-ADTestParameters).DomainMode,
+        [Parameter()][String][ValidateSet('Win2003','Win2008','Win2008R2','Win2012','Win2012R2','WinThreshold','Default')]$ForestMode = (Get-ADTestParameters).ForestMode,
+        [Parameter()][String][ValidateSet('Win2003','Win2008','Win2008R2','Win2012','Win2012R2','WinThreshold','Default')]$DomainMode = (Get-ADTestParameters).DomainMode,
         [Parameter()][String]$PwdString = (Get-ADTestParameters).PwdString,
         [Parameter()][String[]]$ModulesToCopy = (Get-ADTestParameters).ModulesToCopy,
         [Parameter()][String[]]$FeaturesToInstall = (Get-ADTestParameters).FeaturesToInstall,
-        [Parameter()][String[]]$FilesToCopy = (Get-ADTestParameters).FeaturesToCopy,
+        [Parameter()][Hashtable]$FilesToCopy = (Get-ADTestParameters).FilesToCopy,
         [Parameter()][String[]]$CommandsToRun = (Get-ADTestParameters).CommandsToRun,
         [Parameter()][String]$VSwitchName = (Get-ADTestParameters).VSwitchName,
         [Parameter()][String]$BaseImagePath = (Get-ADTestParameters).BaseImagePath,
+        [Parameter()][String]$ParentDomain,
+        [Parameter()][String]$ParentDns,
         [Parameter()][Switch]$Wait
     )
 
@@ -69,28 +71,39 @@ Function New-ADTestDomain {
         [void](New-VMSwitch -Name $VSwitchName -SwitchType Internal -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent))
     }
 
-    $dnsAddress = '127.0.0.1'
+    # Define the DNS resolver for the 1st root DC in the domain
+    if([String]::IsNullOrEmpty($ParentDomain)){
+        $dnsAddress = '127.0.0.1'
+    }
+    else {
+        if([String]::IsNullOrEmpty($ParentDns)){
+            Throw "You must specify -ParentDns for the -ParentDomain"
+        }
+        else {
+            $dnsAddress = $ParentDns
+        }
+    }
     $jobs= @()
     for ($dcNumber = 0; $dcNumber -lt $DCCount; $dcNumber++) {
         $vmName = $DCNamePattern -f ($dcNumber + 1) # +1 so that the name corresponds to the IP address
         $ipAddress = $IPAddressPattern -f ($dcNumber + 1)
 
         $jobs += Start-ThreadJob -Name $vmName -ArgumentList ($vmName, $BaseImagePath, $VSwitchName, ($dcNumber -eq 0), $ipAddress, $dnsAddress, $DomainName, $ForestMode, $DomainMode) -ScriptBlock {
-            Param($VMName, $BaseImagePath, $VSwitchName, $IsFirstDC, $IPAddress, $DNSAddress, $DomainName, $ForestMode, $DomainMode)
+            Param($VMName, $BaseImagePath, $VSwitchName, $IsFirstDC, $IPAddress, $DNSAddress, $DomainName, $ForestMode, $DomainMode, $ParentDomain)
 
             Write-Progress -Activity 'Provisioning new server' -
             $vm = New-ADTestServer -VMName $VMName -VSwitchName $VSwitchName -BaseImagePath $BaseImagePath -Start -Wait
             if($IsFirstDC){
                 Write-Verbose "Promoting VM $VMName as first DC in domain $DomainName)"
                 Write-Progress -Activity 'Initializing new server' -PercentComplete 20
-                Initialize-ADTestServer -Vm $vm -IPAddress $IPAddress -DNSAddress $DNSAddress
+                Initialize-ADTestServer -Vm $vm -IPAddress $IPAddress -DNSAddress $DNSAddress -InstallADFeatures
                 Write-Progress -Activity 'Promoting first DC' -PercentComplete 50
-                Initialize-ADTestFirstDC -Vm $vm -DomainName $DomainName -ForestMode $ForestMode -DomainMode $DomainMode
+                Initialize-ADTestFirstDC -Vm $vm -DomainName $DomainName -ForestMode $ForestMode -DomainMode $DomainMode -ParentDomain $ParentDomain
             }
             else {
                 Write-Verbose "Promoting VM $VMName as subsequent DC"
                 Write-Progress -Activity 'Initializing new server' -PercentComplete 20
-                Initialize-ADTestServer -Vm $vm -IPAddress $IPAddress -DNSAddress $DNSAddress -DomainName $DomainName
+                Initialize-ADTestServer -Vm $vm -IPAddress $IPAddress -DNSAddress $DNSAddress -DomainName $DomainName -InstallADFeatures
                 Write-Progress -Activity 'Promoting subsequent DC' -PercentComplete 50
                 Initialize-ADTestSubsequentDC -Vm $vm -DomainName $DomainName
             }
@@ -125,16 +138,22 @@ Function Initialize-ADTestFirstDC {
     Param(
         [Parameter(Position=0, Mandatory=$True)]$Vm,
         [Parameter()][String]$DomainName = (Get-ADTestParameters).DomainName,
-        [Parameter()][String]$ForestMode = (Get-ADTestParameters).ForestMode,
-        [Parameter()][String]$DomainMode = (Get-ADTestParameters).DomainMode
+        [Parameter()][String]$ParentDomain = (Get-ADTestParameters).ParentDomain,
+        [Parameter()][String][ValidateSet('Win2003','Win2008','Win2008R2','Win2012','Win2012R2','WinThreshold','Default')]$ForestMode = (Get-ADTestParameters).ForestMode,
+        [Parameter()][String][ValidateSet('Win2003','Win2008','Win2008R2','Win2012','Win2012R2','WinThreshold','Default')]$DomainMode = (Get-ADTestParameters).DomainMode
     )
     try {
-        Write-Verbose "Creating domain $DomainName with machine name $($Vm.Name), forest mode $ForestMode, domain mode $DomainMode"
+        Write-Verbose "Creating domain $DomainName with machine name $($Vm.Name), parent domain $ParentDomain, forest mode $ForestMode, domain mode $DomainMode"
 
         $pss = New-ADTestServerSession -Vm $Vm
-        Invoke-Command -Session $pss -ArgumentList ($DomainName, $ForestMode, $DomainMode, (Get-ADTestSecurePassword)) -ScriptBlock {
-            Param($DomainName, $ForestMode, $DomainMode, $SecurePwd)
-            [void](Install-ADDSForest -SkipPreChecks -SafeModeAdministratorPassword $SecurePwd -DomainName $DomainName -ForestMode $ForestMode -DomainMode $DomainMode -InstallDns -NoDnsOnNetwork -Force)
+        Invoke-Command -Session $pss -ArgumentList ($DomainName, $ParentDomain, $ForestMode, $DomainMode, (Get-ADTestSecurePassword)) -ScriptBlock {
+            Param($DomainName, $ParentDomain, $ForestMode, $DomainMode, $SecurePwd)
+            if([String]::IsNullOrEmpty($ParentDomain)){
+                [void](Install-ADDSForest -SkipPreChecks -SafeModeAdministratorPassword $SecurePwd -DomainName $DomainName -ForestMode $ForestMode -DomainMode $DomainMode -InstallDns -NoDnsOnNetwork -Force)
+            }
+            else {
+                [void](Install-ADDSDomain -SkipPreChecks -SafeModeAdministratorPassword $SecurePwd -NewDomainName $DomainName -ParentDomain $ParentDomain -DomainMode $DomainMode -InstallDns -Force)
+            }
         }
     }
     catch {
@@ -205,7 +224,7 @@ Function Set-ADTestServerNetworking {
 
         # Configure IP and DNS of the first Ethernet adapter
         $iface = (Get-NetIPInterface -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -match "^Ethernet.*" } | Select-Object -First 1)
-        [void]($iface | New-NetIPAddress -IPAddress $IPAddress -PrefixLength 24 -Verbose:([bool]$PSBoundParameters["Verbose"].IsPresent))
+        [void]($iface | New-NetIPAddress -IPAddress $IPAddress -PrefixLength 16 -Verbose:([bool]$PSBoundParameters["Verbose"].IsPresent))
         [void]($iface | Set-DnsClientServerAddress -ServerAddresses @($DNSAddress) -Verbose:([bool]$PSBoundParameters["Verbose"].IsPresent))
 
         # Disable IPv6
@@ -232,10 +251,6 @@ Function Install-ADTestServerFeatures {
         # Disable auto-startup of Server Mangler because it is annoying
         [void](Get-ScheduledTask -TaskName 'ServerManager' | Disable-ScheduledTask)
 
-        # Install AD components
-        [void](Install-WindowsFeature AD-Domain-Services -Verbose:([bool]$PSBoundParameters["Verbose"].IsPresent))
-        [void](Install-WindowsFeature RSAT-ADDS -IncludeAllSubFeature -Verbose:([bool]$PSBoundParameters["Verbose"].IsPresent))
-
         # Install additional configured features
         if($null -ne $FeaturesToInstall -and $FeaturesToInstall.Count -gt 0){
             [void](Install-WindowsFeature -Name $FeaturesToInstall -Verbose:([bool]$PSBoundParameters["Verbose"].IsPresent))
@@ -249,23 +264,50 @@ Function Copy-ADTestServerFiles {
     [CmdletBinding()]
     Param(
         [Parameter(Mandatory=$True, Position=0)]$Vm,
-        [Parameter(Position=0)][String[]]$FilesToCopy = (Get-ADTestParameters).FilesToCopy
+        [Parameter(Position=0)][Hashtable]$FilesToCopy = (Get-ADTestParameters).FilesToCopy
     )
-    Write-Verbose "Copy files for $($Vm.Name) $($FilesToCopy -join ',')"
-    if($FilesToCopy.Count -gt 0){ # Make sure there is something copy
-        $FilesToCopy.ForEach({
-            if(Test-Path -Path $_ -PathType Container){ # If its a folder, create the folder in the VM and recurse
-                (Get-ChildItem $_).ForEach({
-                    Copy-ADTestServerFiles -Vm $Vm -FilesToCopy @(,$_.FullName)
-                })
-            }
-            elseif(Test-Path -Path $_ -PathType Leaf) {
-                $sourcePath = (Get-Item $_).FullName
-                $destPath = "C:\Users\Administrator\Downloads\$(Split-Path $sourcePath -NoQualifier)"
-                Copy-VMFile -Name $vm.Name -SourcePath $sourcePath -DestinationPath $destPath -FileSource Host -CreateFullPath
-            }
-        })
+    Write-Verbose "Copy files for $($Vm.Name)"
+    if($FilesToCopy.Count -gt 0){
+        $TargetFolderBase = 'C:\ProgramData\ADTestVHost' # Typically evaluates to C:\ProgramData\Downloads
+        Copy-ADTestServerFilesRecursive -Vm $Vm -FilesToCopy $FilesToCopy -TargetFolderBase $TargetFolderBase
     }
+}
+
+Function Copy-ADTestServerFilesRecursive {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory=$True, Position=0)]$Vm,
+        [Parameter(Mandatory=$True)][Hashtable]$FilesToCopy,
+        [Parameter(Mandatory=$True)][String]$TargetFolderBase
+    )
+
+    $FilesToCopy.GetEnumerator().ForEach({
+        if(Test-Path -Path $_.Name -PathType Container){ # If source is a folder, assume the target is a folder and recurse over the source's children
+            if(-not [String]::IsNullOrEmpty($_.Value)){
+                $TargetFolderBase += "\$($_.Value)"
+            }
+            else {
+                $TargetFolderBase += "\$(Split-Path $_.Name -Leaf)"
+            }
+            (Get-ChildItem $_.Name).ForEach({
+                $FileToCopy = @{}
+                $FileToCopy.Add($_.FullName, $_.Value)
+                Copy-ADTestServerFilesRecursive -Vm $Vm -FilesToCopy $FileToCopy -TargetFolderBase $TargetFolderBase
+            })
+        }
+        elseif(Test-Path -Path $_.Name -PathType Leaf) {
+            $sourcePath = (Get-Item $_.Name).FullName
+            if(-not [String]::IsNullOrEmpty($_.Value)){
+                $TargetFolderBase += "\$($_.Value)"
+            }
+            $destPath = "$TargetFolderBase\$(Split-Path $sourcePath -Leaf)"
+            Write-Verbose "Copy from $sourcePath to $destPath"
+            Copy-VMFile -Name $vm.Name -SourcePath $sourcePath -DestinationPath $destPath -FileSource Host -CreateFullPath
+        }
+        else {
+            # Source path is not a file or folder
+        }
+    })
 }
 
 # .EXTERNALHELP ADTestVHost.psm1-Help.xml
@@ -320,7 +362,7 @@ Function Invoke-ADTestServerCommands {
     [CmdletBinding()]
     Param(
         [Parameter(Mandatory=$True, Position=0, ValueFromPipeline=$True)]$Vm,
-        [Parameter(Mandatory=$True, Position=1)][String[]]$CommandsToRun
+        [Parameter(Position=1)][String[]]$CommandsToRun = (Get-ADTestParameters).CommandsToRun
     )
     Write-Verbose "Invoke commands for $($Vm.Name) $($CommandsToRun -join ";")"
 
@@ -342,6 +384,9 @@ Function Initialize-ADTestServer {
         [Parameter(Mandatory=$True, Position=2)][String]$DNSAddress,
         [Parameter()][String[]]$FeaturesToInstall = (Get-ADTestParameters).FeaturesToInstall,
         [Parameter()][String[]]$ModulesToCopy = (Get-ADTestParameters).ModulesToCopy,
+        [Parameter()][Hashtable]$FilesToCopy = (Get-ADTestParameters).FilesToCopy,
+        [Parameter()][String[]]$CommandsToRun = (Get-ADTestParameters).CommandsTorRun,
+        [Parameter()][Switch]$InstallADFeatures,
         [Parameter()][String]$DomainName
     )
 
@@ -351,16 +396,20 @@ Function Initialize-ADTestServer {
     Set-ADTestServerNetworking -Vm $Vm -IPAddress $IPAddress -DNSAddress $DNSAddress
 
     Write-Progress -Activity "Initializing VM as test server" -PercentComplete 20 -CurrentOperation "Installing Windows features"
+    if($InstallADFeatures){
+        # Install AD components
+        [void](Install-ADTestServerFeatures -Vm $Vm -FeaturesToInstall @('AD-Domain-Services', 'RSAT-ADDS') -Verbose:([bool]$PSBoundParameters["Verbose"].IsPresent))
+    }
     Install-ADTestServerFeatures -Vm $Vm -FeaturesToInstall $FeaturesToInstall
 
     Write-Progress -Activity "Initializing VM as test server" -PercentComplete 50 -CurrentOperation "Copying and installing additional PowerShell modules"
     Copy-ADTestServerModules -Vm $Vm -ModulesToCopy $ModulesToCopy
 
     # This is where to copy other files and applications that need to be installed
-    Copy-ADTestServerFiles -Vm $Vm -FilesToCopy (Get-ADTestParameters).FilesToCopy
+    Copy-ADTestServerFiles -Vm $Vm -FilesToCopy $FilesToCopy
 
     # This is where to invoke additional commands
-    Invoke-ADTestServerCommands -Vm $Vm -CommandsToRun (Get-ADTestParameters).CommandsToRun
+    Invoke-ADTestServerCommands -Vm $Vm -CommandsToRun $CommandsToRun
 
     if(-not [String]::IsNullOrEmpty($DomainName)){
         Write-Progress -Activity "Initializing VM as test server" -PercentComplete 80 -CurrentOperation "Joining server to domain"
