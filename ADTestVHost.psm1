@@ -14,7 +14,6 @@
 # implement multi-domain forest support
 
 
-
 # .EXTERNALHELP ADTestVHost.psm1-Help.xml
 Function Get-ADTestParameters {
 #    if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
@@ -84,27 +83,22 @@ Function New-ADTestDomain {
         }
     }
     $jobs= @()
+    Write-Progress -Activity 'Provisioning servers' -CurrentOperation 'Starting background tasks' -Status 'Running' -PercentComplete 0 -Id 0
     for ($dcNumber = 0; $dcNumber -lt $DCCount; $dcNumber++) {
         $vmName = $DCNamePattern -f ($dcNumber + 1) # +1 so that the name corresponds to the IP address
         $ipAddress = $IPAddressPattern -f ($dcNumber + 1)
 
-        $jobs += Start-ThreadJob -Name $vmName -ArgumentList ($vmName, $BaseImagePath, $VSwitchName, ($dcNumber -eq 0), $ipAddress, $dnsAddress, $DomainName, $ForestMode, $DomainMode) -ScriptBlock {
+        Write-Progress -Activity 'Provisioning servers' -CurrentOperation 'Starting task $vmName' -Status 'Running' -PercentComplete (($dcNummber * 100) / $DCCount) -Id 0
+        $jobs += Start-ThreadJob -Name $vmName -ArgumentList ($vmName, $BaseImagePath, $VSwitchName, ($dcNumber -eq 0), $ipAddress, $dnsAddress, $DomainName, $ForestMode, $DomainMode, $ParentDomain) -ScriptBlock {
             Param($VMName, $BaseImagePath, $VSwitchName, $IsFirstDC, $IPAddress, $DNSAddress, $DomainName, $ForestMode, $DomainMode, $ParentDomain)
 
-            Write-Progress -Activity 'Provisioning new server' -
             $vm = New-ADTestServer -VMName $VMName -VSwitchName $VSwitchName -BaseImagePath $BaseImagePath -Start -Wait
             if($IsFirstDC){
-                Write-Verbose "Promoting VM $VMName as first DC in domain $DomainName)"
-                Write-Progress -Activity 'Initializing new server' -PercentComplete 20
                 Initialize-ADTestServer -Vm $vm -IPAddress $IPAddress -DNSAddress $DNSAddress -InstallADFeatures
-                Write-Progress -Activity 'Promoting first DC' -PercentComplete 50
                 Initialize-ADTestFirstDC -Vm $vm -DomainName $DomainName -ForestMode $ForestMode -DomainMode $DomainMode -ParentDomain $ParentDomain
             }
             else {
-                Write-Verbose "Promoting VM $VMName as subsequent DC"
-                Write-Progress -Activity 'Initializing new server' -PercentComplete 20
                 Initialize-ADTestServer -Vm $vm -IPAddress $IPAddress -DNSAddress $DNSAddress -DomainName $DomainName -InstallADFeatures
-                Write-Progress -Activity 'Promoting subsequent DC' -PercentComplete 50
                 Initialize-ADTestSubsequentDC -Vm $vm -DomainName $DomainName
             }
         }
@@ -113,21 +107,27 @@ Function New-ADTestDomain {
             $dnsAddress = $ipAddress # Use the IP of the first DC as the DNS address for subsequent DCs
         }
     }
+
     if($Wait){
         # Sit in a loop and poll the Progress channel of each job. Exit when all jobs are complete
-        $runningStates = @('Running', 'AtBreakpoint', 'NotStarted', 'Stopping', 'Suspended')
+        $runningStates = @($null, 'Running', 'AtBreakpoint', 'NotStarted', 'Stopping', 'Suspended')
         do {
             $jobsRunning = $false
-            $jobs.ForEach({
-                if($runningStates -eq $_.State){ # N.B. comparison must be ordered this way (array -eq scalar)
-                    $jobsRunning = $True
-                    if($null -ne $_.Progress -and $_.Progress.Count -gt 0){
-                        $lastProgress = $_.Progress[$_.Progress.Count - 1]
-                        Write-Progress -Id $_.Id -Activity ("$($_.Name) - $($lastProgress.Activity)") -Status $lastProgress.StatusDescription -PercentComplete $lastProgress.PercentComplete -CurrentOperation $lastProgress.CurrentOperation
-                        Start-Sleep 1
-                    }
+            foreach ($job in $jobs){
+                if($runningStates.Contains($job.State)){
+                    $jobsRunning = $true
                 }
-            })
+                Start-Sleep -Seconds 1
+#                foreach($progress in $job.Progress){
+#                    Write-Progress @{
+#                        Activity = $progress.Activity;
+#                        CurrentOperation = $progress.CurrentOperation;
+#                        Status = $progress.Status;
+#                        PercentComplete = $progress.PercentComplete;
+#                        Id = $progress.Id;
+#                   }
+#              }
+            }
         } while($jobsRunning)
     }
 }
@@ -152,7 +152,8 @@ Function Initialize-ADTestFirstDC {
                 [void](Install-ADDSForest -SkipPreChecks -SafeModeAdministratorPassword $SecurePwd -DomainName $DomainName -ForestMode $ForestMode -DomainMode $DomainMode -InstallDns -NoDnsOnNetwork -Force)
             }
             else {
-                [void](Install-ADDSDomain -SkipPreChecks -SafeModeAdministratorPassword $SecurePwd -NewDomainName $DomainName -ParentDomain $ParentDomain -DomainMode $DomainMode -InstallDns -Force)
+                $cred = New-Object System.Management.Automation.PSCredential "$ParentDomain\Administrator", $securePwd
+                [void](Install-ADDSDomain -SkipPreChecks -SafeModeAdministratorPassword $SecurePwd -NewDomainName ($DomainName -split '\.')[0] -ParentDomain $ParentDomain -Credential $cred -DomainMode $DomainMode -InstallDns -Force)
             }
         }
     }
@@ -268,7 +269,7 @@ Function Copy-ADTestServerFiles {
     )
     Write-Verbose "Copy files for $($Vm.Name)"
     if($FilesToCopy.Count -gt 0){
-        $TargetFolderBase = 'C:\ProgramData\ADTestVHost' # Typically evaluates to C:\ProgramData\Downloads
+        $TargetFolderBase = 'C:\ProgramData\ADTestVHost'
         Copy-ADTestServerFilesRecursive -Vm $Vm -FilesToCopy $FilesToCopy -TargetFolderBase $TargetFolderBase
     }
 }
@@ -390,19 +391,19 @@ Function Initialize-ADTestServer {
         [Parameter()][String]$DomainName
     )
 
-    Write-Verbose "Initializing VM $($Vm.Name) as test server at $IPAddress"
+    Write-Verbose "Configuring server $($Vm.Name) at $IPAddress"
 
-    Write-Progress -Activity "Initializing VM as test server" -PercentComplete 0 -CurrentOperation "Configuring networking"
+    Write-Progress -Activity "Configuring server" -PercentComplete 0 -CurrentOperation "Configuring networking"
     Set-ADTestServerNetworking -Vm $Vm -IPAddress $IPAddress -DNSAddress $DNSAddress
 
-    Write-Progress -Activity "Initializing VM as test server" -PercentComplete 20 -CurrentOperation "Installing Windows features"
+    Write-Progress -Activity "Configuring server" -PercentComplete 20 -CurrentOperation "Installing Windows features"
     if($InstallADFeatures){
         # Install AD components
         [void](Install-ADTestServerFeatures -Vm $Vm -FeaturesToInstall @('AD-Domain-Services', 'RSAT-ADDS') -Verbose:([bool]$PSBoundParameters["Verbose"].IsPresent))
     }
     Install-ADTestServerFeatures -Vm $Vm -FeaturesToInstall $FeaturesToInstall
 
-    Write-Progress -Activity "Initializing VM as test server" -PercentComplete 50 -CurrentOperation "Copying and installing additional PowerShell modules"
+    Write-Progress -Activity "Configuring server" -PercentComplete 50 -CurrentOperation "Copying and installing additional PowerShell modules"
     Copy-ADTestServerModules -Vm $Vm -ModulesToCopy $ModulesToCopy
 
     # This is where to copy other files and applications that need to be installed
@@ -412,11 +413,11 @@ Function Initialize-ADTestServer {
     Invoke-ADTestServerCommands -Vm $Vm -CommandsToRun $CommandsToRun
 
     if(-not [String]::IsNullOrEmpty($DomainName)){
-        Write-Progress -Activity "Initializing VM as test server" -PercentComplete 80 -CurrentOperation "Joining server to domain"
+        Write-Progress -Activity "Configuring server" -PercentComplete 80 -CurrentOperation "Joining server to domain"
         Join-ADTestServer -Vm $Vm -DomainName $DomainName -ComputerName $vm.Name -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent)
     }
     else {
-        Write-Progress -Activity "Initializing VM as test server" -PercentComplete 80 -CurrentOperation "Renaming computer"
+        Write-Progress -Activity "Configuring server" -PercentComplete 80 -CurrentOperation "Renaming computer"
         Rename-ADTestServer -Vm $Vm -ComputerName $vm.Name -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent)
     }
 
@@ -487,7 +488,8 @@ Function New-ADTestServer {
         [Parameter()][String]$BaseImagePath = (Get-ADTestParameters).BaseImagePath,
         [Parameter()][String]$VMPath = (Get-ADTestParameters).VMPath,
         [Parameter()][String]$VSwitchName = (Get-ADTestParameters).VSwitchName,
-        [Parameter()][uint64]$Memory = 2048MB,
+        [Parameter()][uint64]$Memory = (Get-ADTestParameters).VMMemory,
+        [Parameter()][int]$ProcessorCount = (Get-ADTestParameters).VMProcessorCount,
         [Parameter()][Switch]$Start,
         [Parameter()][Switch]$Wait
     )
@@ -500,6 +502,8 @@ Function New-ADTestServer {
         Write-Verbose "Creating VM $VMName"
         $vm = New-VM -Name $VMName -MemoryStartupBytes $Memory -NoVHD -SwitchName $VSwitchName -Path $VMPath -Generation 2 -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent)
         Enable-VMIntegrationService -VM $vm -Name 'Guest Service Interface', 'Heartbeat', 'Key-Value Pair Exchange', 'Shutdown', 'Time Synchronization', 'VSS'
+        Set-VM -VM $vm -ProcessorCount $ProcessorCount -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent)
+
         Get-VMNetworkAdapter -VM $vm | Connect-VMNetworkAdapter -SwitchName $VSwitchName
         $vhdPath = "$($vm.Path)\Virtual Hard Disks\$($vm.Name).vhdx"
         if (Test-Path $vhdPath) {
@@ -508,6 +512,14 @@ Function New-ADTestServer {
         $vhd = New-VHD -Differencing -Path $vhdPath -ParentPath $BaseImagePath -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent)
         $bootDevice = Add-VMHardDiskDrive -VM $vm -Path $vhd.Path -ControllerType SCSI -ControllerNumber 0 -ControllerLocation 0 -Passthru -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent)
         [void](Set-VMFirmware -VM $vm -BootOrder @($bootDevice) -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent))
+
+        $dataVhdPath = "$($vm.Path)\Virtual Hard Disks\$($vm.Name)-data.vhdx"
+        if (Test-Path $dataVhdPath) {
+            Remove-Item $dataVhdPath -Force
+        }
+        $dataVhd = New-VHD -Path $dataVhdPath -Dynamic -Size 40GB -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent)
+        Add-VMHardDiskDrive -VM $vm -Path $dataVhd.Path -ControllerType SCSI -ControllerNumber 0 -ControllerLocation 1 -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent)
+
         if ($Start) {
             [void](Start-VM -VM $vm -Verbose:([bool]$PSBoundParameters['Verbose'].IsPresent))
         }

@@ -16,6 +16,23 @@
             "type": "PowerShell",
             "request": "launch",
             "cwd": ""
+        },
+        {
+            "name": "Launch New-ADTestDomain",
+            "type": "PowerShell",
+            "request": "launch",
+            "script": "${workspaceFolder}/Launch-Script.ps1",
+            "cwd": ""
+        },
+        {
+            "name": "PowerShell: Debug Pester tests",
+            "type": "PowerShell",
+            "request": "launch",
+            "script": "Invoke-Pester",
+            "args": [
+                "JobProgressManager.Tests.ps1"
+            ],
+            "cwd": "${workspaceFolder}"
         }
     ]
 }

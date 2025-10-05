@@ -1,16 +1,18 @@
 {
-    "vSwitchName" : "ADFR",
-    "vmPath" : "H:\\Hyper-V",
+    "vSwitchName" : "Test",
+    "vmPath" : "E:\\Hyper-V",
     "domainName" : "foo.local",
     "forestMode" : "Default",
     "domainMode" : "Default",
     "dcNamePattern" : "FOODC{0}",
     "ipAddressPattern" : "10.1.0.{0}",
-    "baseImagePath" : "H:\\Saved VHDs\\WS2019-Base.vhdx",
+    "baseImagePath" : "F:\\HyperV Images\\WS2025-Base.vhdx",
     "pwdString" : "!@#123qwe",
     "modulesToCopy" : [],
-    "featuresToInstall" : [],
+    "featuresToInstall" : ["RSAT-ADDS","RSAT-AD-PowerShell","Windows-Server-Backup"],
     "filesToCopy" : {},
     "commandsToRun" : [],
-    "parentDomain" : ""
+    "parentDomain" : "",
+    "vmMemory" : "4096MB",
+    "vmProcessorCount": 2
 }
