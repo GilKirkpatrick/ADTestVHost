@@ -51,7 +51,7 @@ Copyright = '(c) 2020 Red Giraffe, LLC. All rights reserved.'
 # ProcessorArchitecture = ''
 
 # Modules that must be imported into the global environment prior to importing this module
-RequiredModules = @('Hyper-V','ThreadJob')
+RequiredModules = @('Hyper-V','Microsoft.PowerShell.ThreadJob')
 
 # Assemblies that must be loaded prior to importing this module
 # RequiredAssemblies = @()
